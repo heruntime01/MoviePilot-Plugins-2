@@ -1,25 +1,21 @@
 
-import re
-from typing import List, Dict
+from typing import List, Dict, Optional
 from .base import SearchProvider
+from urllib.parse import quote
 
 class AiPanProvider(SearchProvider):
     name = 'aipan'
-    def search(self, query: str, media_type: str, year: int|None=None) -> List[Dict]:
-        opener = self._build_opener()
-        # aipan search endpoints vary; try common pattern
+    def search(self, query: str, media_type: str, year: Optional[int]=None) -> List[Dict]:
         urls = [
-            f'https://www.aipan.me/search?q={__import__("urllib.parse").parse.quote(query)}',
-            f'https://aipan.me/search?q={__import__("urllib.parse").parse.quote(query)}',
+            f'https://www.aipan.me/search?q={quote(query)}',
+            f'https://aipan.me/search?q={quote(query)}',
         ]
         html = ''
         for url in urls:
             try:
-                req = __import__('urllib.request').request.Request(url, headers={'User-Agent':'Mozilla/5.0'})
-                with opener.open(req, timeout=self.timeout) as resp:
-                    html = resp.read().decode('utf-8','ignore')
-                    if html:
-                        break
+                html = self._get_html(url)
+                if html:
+                    break
             except Exception:
                 continue
         if not html:
