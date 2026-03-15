@@ -16,10 +16,26 @@ from .metadata import total_episodes_from_douban
 import re
 import datetime
 
+# Defaults for RSSHub paths (triple-quoted to avoid syntax issues)
+DEFAULT_RSSHUB_MOVIE_PATHS = """
+/douban/movie/weekly/movie_real_time_hotest
+/douban/movie/weekly/movie_showing
+/douban/movie/weekly/movie_most_watched
+/douban/movie/weekly/movie_high_score
+/douban/movie/weekly/movie_trending
+"""
+DEFAULT_RSSHUB_TV_PATHS = """
+/douban/tv/weekly/tv_real_time_hotest
+/douban/tv/weekly/tv_showing
+/douban/tv/weekly/tv_most_watched
+/douban/tv/weekly/tv_high_score
+/douban/tv/weekly/tv_trending
+"""
+
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.3.8"
+    plugin_version = "0.3.9"
     plugin_config_prefix = 'autofollow115_'
     plugin_author = "Herun"
     author_url = 'https://github.com/heruntime01'
@@ -137,22 +153,8 @@ class AutoFollow115(_PluginBase):
             'validate_115': False,
             'enable_rsshub': True,
             'rsshub_base': 'https://rss.hrtime.asia:4000',
-            'rsshub_movie_paths': '
-'.join([
-                '/douban/movie/weekly/movie_real_time_hotest',
-                '/douban/movie/weekly/movie_showing',
-                '/douban/movie/weekly/movie_most_watched',
-                '/douban/movie/weekly/movie_high_score',
-                '/douban/movie/weekly/movie_trending',
-            ]),
-            'rsshub_tv_paths': '
-'.join([
-                '/douban/tv/weekly/tv_real_time_hotest',
-                '/douban/tv/weekly/tv_showing',
-                '/douban/tv/weekly/tv_most_watched',
-                '/douban/tv/weekly/tv_high_score',
-                '/douban/tv/weekly/tv_trending',
-            ]),
+            'rsshub_movie_paths': DEFAULT_RSSHUB_MOVIE_PATHS,
+            'rsshub_tv_paths': DEFAULT_RSSHUB_TV_PATHS,
             'enable_nullbr': False,
             'nullbr_base': '',
             'http_proxy': None,
