@@ -18,7 +18,7 @@ import datetime
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.3.3"
+    plugin_version = "0.3.4"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -41,7 +41,11 @@ class AutoFollow115(_PluginBase):
         self._providers = provs
 
     def get_state(self) -> bool:
-        return self._enabled
+        self._log('info', f'scan done subs={len(self.get_data('subs') or [])}'); return self._enabled
+
+    @staticmethod
+    def get_render_mode() -> str:
+        return 'vuetify'
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
@@ -51,6 +55,10 @@ class AutoFollow115(_PluginBase):
 
     def get_api(self) -> List[Dict[str, Any]]:
         return [
+            {"path": "/logs", "endpoint": self.api_logs, "methods": ["GET"], "auth": "apikey",
+             "summary": "查看插件日志", "description": "limit(默认200)"},
+            {"path": "/logs/clear", "endpoint": self.api_logs_clear, "methods": ["POST"], "auth": "apikey",
+             "summary": "清空插件日志", "description": ""},
             {"path": "/discover", "endpoint": self.api_discover, "methods": ["GET"], "auth": "apikey",
              "summary": "获取热门列表(豆瓣m站+RSSHub)", "description": "type=tv|movie"},
             {"path": "/subscribe", "endpoint": self.api_subscribe, "methods": ["POST"], "auth": "apikey",
@@ -149,6 +157,14 @@ class AutoFollow115(_PluginBase):
             {"component": "v-card", "props": {"class": "pa-3"}, "children": [
                 {"component": "v-alert", "props": {"type": "info", "text": f"AutoFollow115 v{self.plugin_version}：在下方表格查看订阅与进度；更多细节见 README。"}},
                 {"component": "v-data-table", "props": {"items": self._table_items(), "headers": headers, "items-per-page": 50}}
+            ]} ,
+            {"component": "v-card", "props": {"class": "pa-3 mt-3"}, "children": [
+                {"component": "v-alert", "props": {"type": "info", "text": "插件日志（最近 200 条）"}},
+                {"component": "v-data-table", "props": {"items": (self.get_data('logs') or [])[-200:], "headers": [
+                    {"title":"时间","key":"ts","width":170},
+                    {"title":"级别","key":"level","width":80},
+                    {"title":"内容","key":"msg"}
+                ], "items-per-page": 200}}
             ]}
         ]
 
@@ -168,14 +184,31 @@ class AutoFollow115(_PluginBase):
             {"id": "af115-discover", "name": "热门刷新", "trigger": CronTrigger.from_crontab("0 */6 * * *"), "func": self.job_discover, "kwargs": {}},
         ]
 
+    def _add_log(self, level: str, msg: str):
+        buf = self.get_data('logs') or []
+        from datetime import datetime as _dt
+        buf.append({'ts': _dt.now().isoformat(timespec='seconds'), 'level': level, 'msg': str(msg)})
+        if len(buf) > 500: buf = buf[-500:]
+        self.save_data('logs', buf)
+
+    def _log(self, level: str, msg: str):
+        try:
+            if level.lower() == "error":
+                getattr(self, "error", print)(msg)
+            else:
+                getattr(self, "info", print)(msg)
+        except Exception:
+            pass
+        self._add_log(level.upper(), msg)
+
     def job_discover(self, **kwargs):
         tv_list: List[Dict] = []
         movie_list: List[Dict] = []
         try:
             tv = douban_hot('tv', 0, 20) or []
             mv = douban_hot('movie', 0, 20) or []
-            tv_list.extend(tv)
-            movie_list.extend(mv)
+            tv_list.extend(tv); self._log('info', f'discover douban tv={len(tv)}')
+            movie_list.extend(mv); self._log('info', f'discover douban movie={len(mv)}')
         except Exception:
             pass
         if bool(self._conf.get('enable_rsshub', True)):
@@ -186,11 +219,11 @@ class AutoFollow115(_PluginBase):
             movie_paths = _split_lines(self._conf.get('rsshub_movie_paths') or '')
             tv_paths = _split_lines(self._conf.get('rsshub_tv_paths') or '')
             try:
-                movie_list.extend(fetch_rsshub(base, movie_paths, proxy=proxy))
+                self._log('info','discover rsshub movie start'); movie_list.extend(fetch_rsshub(base, movie_paths, proxy=proxy))
             except Exception:
                 pass
             try:
-                tv_list.extend(fetch_rsshub(base, tv_paths, proxy=proxy))
+                self._log('info','discover rsshub tv start'); tv_list.extend(fetch_rsshub(base, tv_paths, proxy=proxy))
             except Exception:
                 pass
         self._discover_cache['tv'] = self._merge_discover(tv_list)
@@ -393,6 +426,20 @@ class AutoFollow115(_PluginBase):
 
     def api_run(self, request=None):
         self.job_scan()
+        return {"ok": True}
+
+    def api_logs(self, request=None):
+        limit = 200
+        try:
+            if request and hasattr(request, "query_params") and request.query_params.get("limit"):
+                limit = int(request.query_params.get("limit"))
+        except Exception:
+            pass
+        buf = self.get_data("logs") or []
+        return {"logs": buf[-limit:]}
+
+    def api_logs_clear(self, request=None):
+        self.save_data("logs", [])
         return {"ok": True}
 
     def stop_service(self):
