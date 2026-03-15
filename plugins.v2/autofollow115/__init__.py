@@ -10,6 +10,7 @@ from .matching import score as score_title, good_enough
 from .providers.pansou import PanSouProvider
 from .providers.aipan import AiPanProvider
 from .providers.nullbr import NullBRProvider
+from .metadata import total_episodes_from_douban
 
 import re
 import datetime
@@ -17,7 +18,7 @@ import datetime
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.3.0"
+    plugin_version = "0.3.1"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -54,8 +55,12 @@ class AutoFollow115(_PluginBase):
              "summary": "获取热门列表(豆瓣m站+RSSHub)", "description": "type=tv|movie"},
             {"path": "/subscribe", "endpoint": self.api_subscribe, "methods": ["POST"], "auth": "apikey",
              "summary": "新增订阅", "description": "字段: type/title/year，可选 include/exclude/max_daily"},
+            {"path": "/unsubscribe", "endpoint": self.api_unsubscribe, "methods": ["POST"], "auth": "apikey",
+             "summary": "取消订阅", "description": "{title}"},
+            {"path": "/reset_progress", "endpoint": self.api_reset_progress, "methods": ["POST"], "auth": "apikey",
+             "summary": "重置进度", "description": "{title}"},
             {"path": "/list", "endpoint": self.api_list, "methods": ["GET"], "auth": "apikey",
-             "summary": "订阅清单", "description": "返回订阅+进度概览"},
+             "summary": "订阅清单", "description": "返回订阅+进度概览(含总集数)"},
             {"path": "/progress", "endpoint": self.api_progress, "methods": ["GET"], "auth": "apikey",
              "summary": "订阅进度", "description": "返回每个订阅的剧集进度/总数"},
             {"path": "/run", "endpoint": self.api_run, "methods": ["POST"], "auth": "apikey",
@@ -110,7 +115,6 @@ class AutoFollow115(_PluginBase):
         return form, defaults
 
     def get_page(self) -> Optional[List[dict]]:
-        # Simple footer note; UI can call /autofollow115/progress to show details
         return [{"component": "v-alert", "props": {"type": "info", "text": "发现/订阅/扫描已启用。进度可调用 /autofollow115/progress 获取。"}}]
 
     def _merge_discover(self, arr: List[Dict]) -> List[Dict]:
@@ -183,7 +187,7 @@ class AutoFollow115(_PluginBase):
         key = sub.get('title')
         if not key:
             return
-        entry = prog.get(key) or {"episodes": [], "pack": False, "last_update": None}
+        entry = prog.get(key) or {"episodes": [], "pack": False, "last_update": None, "total": None, "last_url": None, "last_provider": None}
         title = item.get('title') or key
         if self._is_pack(title):
             entry['pack'] = True
@@ -191,7 +195,27 @@ class AutoFollow115(_PluginBase):
         if ep:
             if ep not in entry['episodes']:
                 entry['episodes'].append(ep)
+        entry['last_url'] = item.get('url')
+        entry['last_provider'] = item.get('provider')
         entry['last_update'] = datetime.datetime.now().isoformat(timespec='seconds')
+        # best-effort total episodes via Douban subject
+        if entry.get('total') is None and sub.get('type') == 'tv':
+            # try map to discover cache by title/year -> douban_id
+            douban_id = None
+            year = sub.get('year')
+            cand = None
+            for it in self._discover_cache.get('tv', []):
+                if it.get('title') == key and (not year or it.get('year') == year):
+                    cand = it; break
+            if cand:
+                douban_id = cand.get('douban_id')
+            total = None
+            try:
+                total = total_episodes_from_douban(douban_id, proxy=self._conf.get('http_proxy')) if douban_id else None
+            except Exception:
+                total = None
+            if total:
+                entry['total'] = int(total)
         prog[key] = entry
         self.save_data('progress', prog)
 
@@ -294,10 +318,26 @@ class AutoFollow115(_PluginBase):
         self.save_data("subs", subs)
         return {"ok": True}
 
+    def api_unsubscribe(self, request=None):
+        payload = request.json() if request else {}
+        title = (payload or {}).get('title')
+        subs = self.get_data('subs') or []
+        subs = [s for s in subs if s.get('title') != title]
+        self.save_data('subs', subs)
+        return {"ok": True, "removed": title}
+
+    def api_reset_progress(self, request=None):
+        payload = request.json() if request else {}
+        title = (payload or {}).get('title')
+        prog = self.get_data('progress') or {}
+        if title in prog:
+            del prog[title]
+        self.save_data('progress', prog)
+        return {"ok": True, "reset": title}
+
     def api_list(self, request=None):
         subs = self.get_data("subs") or []
         prog = self.get_data('progress') or {}
-        # summary per sub
         out = []
         for s in subs:
             key = s.get('title')
@@ -310,6 +350,7 @@ class AutoFollow115(_PluginBase):
                 'episodes_count': len(eps),
                 'last_episode': (eps[-1] if eps else None),
                 'pack': p.get('pack') or False,
+                'total_episodes': p.get('total'),
                 'last_update': p.get('last_update'),
             })
         return {'subs': out}
@@ -329,6 +370,9 @@ class AutoFollow115(_PluginBase):
                 'episodes': eps,
                 'episodes_count': len(eps),
                 'pack': p.get('pack') or False,
+                'total_episodes': p.get('total'),
+                'last_url': p.get('last_url'),
+                'last_provider': p.get('last_provider'),
                 'last_update': p.get('last_update'),
             })
         return {'progress': out}
