@@ -4,7 +4,11 @@ import re
 import json
 import datetime
 from typing import Any, Dict, List, Tuple
-from app.plugins import Plugin, ServiceTask
+try:
+    from app.plugins import Plugin, ServiceTask
+except Exception:
+    from app.core.plugin import Plugin, ServiceTask
+
 from app.core.event import eventmanager
 from app.log import logger
 from apscheduler.triggers.cron import CronTrigger
@@ -15,7 +19,7 @@ plugin_name = 'AutoFollow115'
 plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
 plugin_icon = 'autofollow115.png'
 plugin_color = '#5E81AC'
-plugin_version = '0.5.5'
+plugin_version = '0.5.6'
 plugin_author = 'heruntime01'
 author_url = 'https://github.com/heruntime01'
 plugin_config_prefix = 'autofollow115_'
