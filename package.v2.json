@@ -237,9 +237,10 @@
       "v0.3.3": "元信息规范化（id/name/author/path/category/tags）、README 完善；维护性更新，无破坏性变更",
       "v0.3.4": "修复设置页（显式 render_mode=vuetify），新增日志功能（APIs: GET /logs, POST /logs/clear；插件页日志表格）",
       "v0.3.5": "修复：配置页与详情页按 VForm/Vuetify 渲染；日志集成 app.log.logger；设置入口可见且可用",
-      "v0.3.6": "对齐官方规范：新增 plugin_config_prefix/auth_level/author_url，插件图标使用文件名；配置/详情页继续按 VForm/Vuetify 渲染"
+      "v0.3.6": "对齐官方规范：新增 plugin_config_prefix/auth_level/author_url，插件图标使用文件名；配置/详情页继续按 VForm/Vuetify 渲染",
+      "v0.3.7": "商店高亮：release=true；修复与优化：设置/详情页渲染与日志功能微调（对齐官方规范）"
     },
-    "version": "0.3.6",
+    "version": "0.3.7",
     "id": "autofollow115",
     "name": "115 自动追剧",
     "author": "Herun",
@@ -259,6 +260,7 @@
       "AiPan",
       "NullBR",
       "自动转存"
-    ]
+    ],
+    "release": true
   }
 }
