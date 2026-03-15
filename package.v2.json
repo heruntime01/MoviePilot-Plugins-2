@@ -255,9 +255,10 @@
       "v0.6.0": "重构：对齐参考项目结构，拆分 ui/handlers/utils；_PluginBase 基类；get_api endpoint；V 组件 UI；稳定服务与消息；继续 chr(10) 与双资产；NEW 持续",
       "v0.6.1": "重构：回归单文件 __init__.py（参考 DoubanRank 风格）；移除 ui.py/handlers.py；表单与页面使用大写 V 组件与 content/props；接口 endpoint、服务 Cron/interval 回退；保留 chr(10) 与 NotificationType.Plugin；双资产/NEW",
       "v0.6.2": "新增：设置页加入“手动订阅”区域（标题/类型/年份）；保存设置即添加订阅并清空标题/年份；其余保持不变",
-      "v0.6.3": "增强日志（分阶段+上下文）；详情页新增“今日候选”海报卡片（来自 RSSHub 热榜/周榜），支持一键订阅；新增筛选项（地区/类型/关键词）；新增 discover 定时任务；与系统订阅保持隔离"
+      "v0.6.3": "增强日志（分阶段+上下文）；详情页新增“今日候选”海报卡片（来自 RSSHub 热榜/周榜），支持一键订阅；新增筛选项（地区/类型/关键词）；新增 discover 定时任务；与系统订阅保持隔离",
+      "v0.6.4": "修复：_first_img 正则在单引号原始串中包含单引号导致 SyntaxError；改用双引号原始串 r\"<img[^>]+src=[\"']([^\"']+)[\"']\"。并将 115 链接正则改为原始串。"
     },
-    "version": "0.6.3",
+    "version": "0.6.4",
     "id": "autofollow115",
     "name": "115 自动追剧",
     "author": "Herun",
