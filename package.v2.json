@@ -244,9 +244,10 @@
       "v0.4.0": "UI 对齐：采用 vuetify 小写组件/children 结构，修复设置页与详情页不可见；保留 release=true 一周；发布双命名资产",
       "v0.5.0": "重写为单文件 __init__.py（对齐官方插件结构）；UI/设置/页面按 vuetify JSON（小写组件+children）；默认值常量化；保留必要 API/服务；发布双命名资产（release=true 保留一周）",
       "v0.5.1": "文档：补齐官方模板 README（功能/安装/配置/API/服务/使用/日志/版本历史/发布流程）；保持 release=true（NEW 一周）",
-      "v0.5.2": "修复：f-string 换行/引号导致的 SyntaxError；消息改为 chr(10)+str() 组装，移除 f-string 与换行转义风险；发布双命名资产"
+      "v0.5.2": "修复：f-string 换行/引号导致的 SyntaxError；消息改为 chr(10)+str() 组装，移除 f-string 与换行转义风险；发布双命名资产",
+      "v0.5.3": "修复：job_scan 缩进错误；post_message 文本安全换行；补齐 urllib.parse 导入并统一 _parse.quote；发布双命名资产（保持 NEW）"
     },
-    "version": "0.5.2",
+    "version": "0.5.3",
     "id": "autofollow115",
     "name": "115 自动追剧",
     "author": "Herun",
