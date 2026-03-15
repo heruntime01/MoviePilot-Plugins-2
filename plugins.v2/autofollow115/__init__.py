@@ -8,14 +8,14 @@ from app.plugins import Plugin, ServiceTask
 from app.core.event import eventmanager
 from app.log import logger
 from apscheduler.triggers.cron import CronTrigger
-from urllib import request as _req, error as _err
+from urllib import request as _req, error as _err, parse as _parse
 
 plugin_id = 'autofollow115'
 plugin_name = 'AutoFollow115'
 plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
 plugin_icon = 'autofollow115.png'
 plugin_color = '#5E81AC'
-plugin_version = '0.5.2'
+plugin_version = '0.5.3'
 plugin_author = 'heruntime01'
 author_url = 'https://github.com/heruntime01'
 plugin_config_prefix = 'autofollow115_'
@@ -253,13 +253,13 @@ class AutoFollow115(Plugin):
         return self.success(msg='cleared')
 
     # ===== Jobs =====
+    
     def job_scan(self):
         if not self._enabled:
             return
         subs = self.get_data('subs') or []
         if not subs:
             return
-        # 简化：按标题关键字去 Pansou/AiPan 抓 115 链接（如启用），并推送到对话框
         cfg = self.get_config() or {}
         enable_pansou = bool(cfg.get('enable_pansou', True))
         enable_aipan = bool(cfg.get('enable_aipan', True))
@@ -273,11 +273,11 @@ class AutoFollow115(Plugin):
             links = list({*links})
             if not links:
                 continue
-            # 只推送一个，避免刷屏
             link = links[0]
-            msg = "[115自动追剧] 命中：" + str(s.get("title")) + chr(10) + str(link)
+            msg = "[115自动追剧] 命中：" + str(s.get("title")) + "
+" + str(link)
             self.post_message('Text', msg)
-prog = self.get_data('progress') or {}
+            prog = self.get_data('progress') or {}
             sid = s.get('id')
             pr = prog.get(sid, {'pushed': [], 'last_update': None, 'total_episodes': None})
             pr['pushed'] = list(set(pr.get('pushed') or []) | {link})
@@ -288,7 +288,6 @@ prog = self.get_data('progress') or {}
         if pushed_any:
             self._log('info', f'push done for {len(subs)} subs')
 
-    # ===== Internals =====
     def _discover_from_rsshub(self) -> List[Dict[str, Any]]:
         cfg = self.get_config() or {}
         if not cfg.get('enable_rsshub', True):
@@ -326,7 +325,7 @@ prog = self.get_data('progress') or {}
 
     def _search_links_pansou(self, kw: str) -> List[str]:
         try:
-            url = f"https://www.pansou.vip/s/{parse.quote(kw)}"
+            url = f"https://www.pansou.vip/s/{_parse.quote(kw)}"
             req = _req.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             with _req.urlopen(req, timeout=15) as resp:
                 html = resp.read().decode('utf-8', 'ignore')
@@ -338,7 +337,7 @@ prog = self.get_data('progress') or {}
 
     def _search_links_aipan(self, kw: str) -> List[str]:
         try:
-            url = f"https://www.aipan.me/search?k={parse.quote(kw)}"
+            url = f"https://www.aipan.me/search?k={_parse.quote(kw)}"
             req = _req.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             with _req.urlopen(req, timeout=15) as resp:
                 html = resp.read().decode('utf-8', 'ignore')
