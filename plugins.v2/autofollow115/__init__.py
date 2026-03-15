@@ -18,7 +18,7 @@ import datetime
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.3.1"
+    plugin_version = "0.3.2"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -114,8 +114,43 @@ class AutoFollow115(_PluginBase):
         }
         return form, defaults
 
+    def _table_items(self) -> List[Dict[str, Any]]:
+        subs = self.get_data("subs") or []
+        prog = self.get_data('progress') or {}
+        items = []
+        for s in subs:
+            key = s.get('title')
+            p = prog.get(key) or {}
+            eps = sorted((p.get('episodes') or []))
+            items.append({
+                'title': key,
+                'type': s.get('type'),
+                'year': s.get('year'),
+                'episodes_count': len(eps),
+                'last_episode': (eps[-1] if eps else None),
+                'pack': '是' if (p.get('pack') or False) else '否',
+                'total_episodes': p.get('total'),
+                'last_update': p.get('last_update'),
+            })
+        return items
+
     def get_page(self) -> Optional[List[dict]]:
-        return [{"component": "v-alert", "props": {"type": "info", "text": "发现/订阅/扫描已启用。进度可调用 /autofollow115/progress 获取。"}}]
+        headers = [
+            {"title": "标题", "key": "title"},
+            {"title": "类型", "key": "type"},
+            {"title": "年份", "key": "year", "align": "end", "width": 80},
+            {"title": "已集数", "key": "episodes_count", "align": "end", "width": 80},
+            {"title": "最新集", "key": "last_episode", "align": "end", "width": 80},
+            {"title": "整包", "key": "pack", "width": 80},
+            {"title": "总集数", "key": "total_episodes", "align": "end", "width": 90},
+            {"title": "最近更新时间", "key": "last_update", "width": 180},
+        ]
+        return [
+            {"component": "v-card", "props": {"class": "pa-3"}, "children": [
+                {"component": "v-alert", "props": {"type": "info", "text": f"AutoFollow115 v{self.plugin_version}：在下方表格查看订阅与进度；更多细节见 README。"}},
+                {"component": "v-data-table", "props": {"items": self._table_items(), "headers": headers, "items-per-page": 50}}
+            ]}
+        ]
 
     def _merge_discover(self, arr: List[Dict]) -> List[Dict]:
         seen = set(); out: List[Dict] = []
@@ -198,9 +233,7 @@ class AutoFollow115(_PluginBase):
         entry['last_url'] = item.get('url')
         entry['last_provider'] = item.get('provider')
         entry['last_update'] = datetime.datetime.now().isoformat(timespec='seconds')
-        # best-effort total episodes via Douban subject
         if entry.get('total') is None and sub.get('type') == 'tv':
-            # try map to discover cache by title/year -> douban_id
             douban_id = None
             year = sub.get('year')
             cand = None
@@ -247,7 +280,6 @@ class AutoFollow115(_PluginBase):
                     continue
                 seen.add(u); uniq.append(r)
             pushed = set(pushed_map.get(q, []) or [])
-            # daily limit per sub (default 3)
             sub_limit = 3
             try:
                 sub_limit = int(sub.get('max_daily', 3))
@@ -265,7 +297,6 @@ class AutoFollow115(_PluginBase):
                 if not u or u in pushed:
                     continue
                 title = r.get('title') or q
-                # include/exclude filters
                 t_low = title.lower()
                 def _lst(x):
                     if x is None:
@@ -283,7 +314,6 @@ class AutoFollow115(_PluginBase):
                     continue
                 if validate and not self._check_url_head(u):
                     continue
-                # record progress before push
                 self._record_progress(sub, r)
                 self._push_115(q, u)
                 pushed_this_round.append(u)
@@ -336,24 +366,8 @@ class AutoFollow115(_PluginBase):
         return {"ok": True, "reset": title}
 
     def api_list(self, request=None):
-        subs = self.get_data("subs") or []
-        prog = self.get_data('progress') or {}
-        out = []
-        for s in subs:
-            key = s.get('title')
-            p = prog.get(key) or {}
-            eps = sorted((p.get('episodes') or []))
-            out.append({
-                'title': key,
-                'type': s.get('type'),
-                'year': s.get('year'),
-                'episodes_count': len(eps),
-                'last_episode': (eps[-1] if eps else None),
-                'pack': p.get('pack') or False,
-                'total_episodes': p.get('total'),
-                'last_update': p.get('last_update'),
-            })
-        return {'subs': out}
+        items = self._table_items()
+        return {'subs': items}
 
     def api_progress(self, request=None):
         subs = self.get_data("subs") or []
