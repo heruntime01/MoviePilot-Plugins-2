@@ -13,7 +13,7 @@ from .providers.aipan import AiPanProvider
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.2.0"
+    plugin_version = "0.2.1"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -61,8 +61,8 @@ class AutoFollow115(_PluginBase):
             {"type": "subheader", "text": "RSSHub (豆瓣榜单)"},
             {"type": "switch", "key": "enable_rsshub", "props": {"label": "启用 RSSHub 榜单聚合"}},
             {"type": "text", "key": "rsshub_base", "props": {"label": "RSSHub 基址", "placeholder": "https://rss.hrtime.asia:4000"}},
-            {"type": "textarea", "key": "rsshub_movie_paths", "props": {"label": "电影路径(一行一个)", "rows": 3}},
-            {"type": "textarea", "key": "rsshub_tv_paths", "props": {"label": "剧集路径(一行一个)", "rows": 3}},
+            {"type": "textarea", "key": "rsshub_movie_paths", "props": {"label": "电影路径(一行一个)", "rows": 6}},
+            {"type": "textarea", "key": "rsshub_tv_paths", "props": {"label": "剧集路径(一行一个)", "rows": 6}},
             {"type": "text", "key": "http_proxy", "props": {"label": "HTTP 代理(可选)", "placeholder": "http://host:port"}},
         ]
         defaults = {
@@ -72,8 +72,22 @@ class AutoFollow115(_PluginBase):
             "quality_prefs": ["2160p", "HEVC", "HDR"],
             "enable_rsshub": True,
             "rsshub_base": "https://rss.hrtime.asia:4000",
-            "rsshub_movie_paths": "/douban/movie/weekly/movie_real_time_hotest\n/douban/movie/weekly/movie_showing",
-            "rsshub_tv_paths": "",
+            # 常用电影榜单（示例，来自自建RSSHub）
+            "rsshub_movie_paths": "\n".join([
+                "/douban/movie/weekly/movie_real_time_hotest",
+                "/douban/movie/weekly/movie_showing",
+                "/douban/movie/weekly/movie_most_watched",
+                "/douban/movie/weekly/movie_high_score",
+                "/douban/movie/weekly/movie_trending",
+            ]),
+            # 常用剧集榜单（示例，来自自建RSSHub）
+            "rsshub_tv_paths": "\n".join([
+                "/douban/tv/weekly/tv_real_time_hotest",
+                "/douban/tv/weekly/tv_showing",
+                "/douban/tv/weekly/tv_most_watched",
+                "/douban/tv/weekly/tv_high_score",
+                "/douban/tv/weekly/tv_trending",
+            ]),
             "http_proxy": None
         }
         return form, defaults
@@ -100,13 +114,11 @@ class AutoFollow115(_PluginBase):
     def job_discover(self, **kwargs):
         tv_list: List[Dict] = []
         movie_list: List[Dict] = []
-        # Douban m-site baseline
         try:
             tv_list.extend(douban_hot('tv', 0, 20))
             movie_list.extend(douban_hot('movie', 0, 20))
         except Exception:
             pass
-        # RSSHub aggregation
         if bool(self._conf.get('enable_rsshub', True)):
             base = (self._conf.get('rsshub_base') or '').strip() or 'https://rss.hrtime.asia:4000'
             proxy = self._conf.get('http_proxy')
