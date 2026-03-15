@@ -12,12 +12,12 @@ from apscheduler.triggers.cron import CronTrigger
 UA={'User-Agent':'Mozilla/5.0'}
 
 class AutoFollow115(_PluginBase):
-    # 元数据（对齐 DoubanRank 风格）
+    # 元数据
     plugin_name = 'AutoFollow115'
     plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
     plugin_icon = 'autofollow115.png'
     plugin_color = '#5E81AC'
-    plugin_version = '0.6.1'
+    plugin_version = '0.6.2'
     plugin_author = 'heruntime01'
     author_url = 'https://github.com/heruntime01'
     plugin_config_prefix = 'autofollow115_'
@@ -36,6 +36,25 @@ class AutoFollow115(_PluginBase):
         # 保证数据键存在
         self.save_data('subs', self.get_data('subs') or [])
         self.save_data('progress', self.get_data('progress') or {})
+        # 手动订阅：保存设置即生效
+        sub_title = (cfg.get('subscribe_title') or '').strip()
+        sub_type = (cfg.get('subscribe_type') or 'tv')
+        sub_year = (cfg.get('subscribe_year') or '').strip()
+        if sub_title:
+            subs = self.get_data('subs') or []
+            sid = sub_title + ':' + sub_type + ((':' + sub_year) if sub_year else '')
+            if not any((s.get('id')==sid) for s in subs):
+                subs.append({'id': sid, 'title': sub_title, 'type': sub_type, 'year': (sub_year or None)})
+                self.save_data('subs', subs)
+                prog = self.get_data('progress') or {}
+                prog.setdefault(sid, {'pushed': [], 'last_update': None, 'total_episodes': None})
+                self.save_data('progress', prog)
+                self._log('info', 'subscribed via settings: ' + sid)
+            # 清空标题/年份，保留类型
+            try:
+                self.update_config({'subscribe_title': '', 'subscribe_year': ''})
+            except Exception:
+                pass
         self._log('info', 'plugin initialized')
 
     # 状态
@@ -120,6 +139,24 @@ class AutoFollow115(_PluginBase):
                                 {'component': 'VTextField', 'props': {'model': 'http_proxy', 'label': 'HTTP 代理 (http://host:port)'}}
                             ]}
                         ]
+                    },
+                    {'component': 'VDivider'},
+                    {'component': 'VSubheader', 'props': {'text': '手动订阅（保存设置后立即添加）'}},
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                                {'component': 'VTextField', 'props': {'model': 'subscribe_title', 'label': '标题'}}
+                            ]},
+                            {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
+                                {'component': 'VSelect', 'props': {'model': 'subscribe_type', 'label': '类型', 'items': [
+                                    {'title':'电视剧','value':'tv'}, {'title':'电影','value':'movie'}
+                                ]}}
+                            ]},
+                            {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
+                                {'component': 'VTextField', 'props': {'model': 'subscribe_year', 'label': '年份(可选)'}}
+                            ]}
+                        ]
                     }
                 ]
             }
@@ -149,10 +186,13 @@ class AutoFollow115(_PluginBase):
             'enable_pansou': True,
             'enable_aipan': True,
             'http_proxy': None,
+            'subscribe_title': '',
+            'subscribe_type': 'tv',
+            'subscribe_year': ''
         }
         return form, defaults
 
-    # 详情页（用卡片/或表格，先用表格展示订阅进度）
+    # 详情页（表格视图）
     def get_page(self) -> List[dict]:
         subs = self.get_data('subs') or []
         prog = self.get_data('progress') or {}
@@ -350,7 +390,6 @@ class AutoFollow115(_PluginBase):
             url = base + (p if p.startswith('/') else '/' + p)
             try:
                 txt = self._http_get(url)
-                # 简单解析 <title> 标签
                 titles = re.findall(r'<title><!\[CDATA\[(.*?)\]\]></title>|<title>(.*?)</title>', txt, re.I)
                 n=0
                 for t1,t2 in titles:
