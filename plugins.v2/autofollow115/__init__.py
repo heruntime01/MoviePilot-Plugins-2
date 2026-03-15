@@ -15,7 +15,7 @@ plugin_name = 'AutoFollow115'
 plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
 plugin_icon = 'autofollow115.png'
 plugin_color = '#5E81AC'
-plugin_version = '0.5.3'
+plugin_version = '0.5.4'
 plugin_author = 'heruntime01'
 author_url = 'https://github.com/heruntime01'
 plugin_config_prefix = 'autofollow115_'
@@ -187,7 +187,7 @@ class AutoFollow115(Plugin):
     # ===== APIs =====
     def api_discover(self, **kwargs):
         try:
-            items = self._discover_from_rsshub()
+            items = list(self._discover_from_rsshub())
             return self.success(data={'items': items})
         except Exception as e:
             self._log('error', f'discover failed: {e}')
