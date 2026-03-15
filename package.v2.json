@@ -246,9 +246,10 @@
       "v0.5.1": "文档：补齐官方模板 README（功能/安装/配置/API/服务/使用/日志/版本历史/发布流程）；保持 release=true（NEW 一周）",
       "v0.5.2": "修复：f-string 换行/引号导致的 SyntaxError；消息改为 chr(10)+str() 组装，移除 f-string 与换行转义风险；发布双命名资产",
       "v0.5.3": "修复：job_scan 缩进错误；post_message 文本安全换行；补齐 urllib.parse 导入并统一 _parse.quote；发布双命名资产（保持 NEW）",
-      "v0.5.4": "修复：/discover 返回生成器导致序列化问题，改为 list(self._discover_from_rsshub())；细节清理"
+      "v0.5.4": "修复：/discover 返回生成器导致序列化问题，改为 list(self._discover_from_rsshub())；细节清理",
+      "v0.5.5": "修复：移除字符串中的 \"\\n\"，统一改为 chr(10) 拼接，避免被折行为实际换行导致的 SyntaxError；稳定性清理"
     },
-    "version": "0.5.4",
+    "version": "0.5.5",
     "id": "autofollow115",
     "name": "115 自动追剧",
     "author": "Herun",
