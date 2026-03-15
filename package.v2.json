@@ -233,9 +233,10 @@
   },
   "AutoFollow115": {
     "history": {
-      "v0.3.1": "总集数(豆瓣抓取, best-effort)、取消订阅/重置进度 API、进度细化"
+      "v0.3.1": "总集数(豆瓣抓取, best-effort)、取消订阅/重置进度 API、进度细化",
+      "v0.3.3": "元信息规范化（id/name/author/path/category/tags）、README 完善；维护性更新，无破坏性变更"
     },
-    "version": "0.3.2",
+    "version": "0.3.3",
     "id": "autofollow115",
     "name": "115 自动追剧",
     "author": "Herun",
