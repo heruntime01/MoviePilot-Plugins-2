@@ -1,6 +1,5 @@
 
 from typing import List, Dict
-
 import json
 
 def _fetch(url: str) -> dict|None:
@@ -13,7 +12,6 @@ def _fetch(url: str) -> dict|None:
     except Exception:
         return None
 
-# Douban m-site collections (may change; V0.1 best-effort)
 COLL = {
   'movie': 'movie_hot_gaia',
   'tv': 'tv_hot',
@@ -27,9 +25,10 @@ def hot(kind: str='tv', start: int=0, count: int=20) -> List[Dict]:
     for it in (data or {}).get('subject_collection_items', []):
         title = it.get('title') or it.get('name')
         year = None
+        ysrc = (it.get('year') or '')
         try:
-            year = int((it.get('year') or '')[:4])
+            year = int(str(ysrc)[:4]) if ysrc else None
         except Exception:
             year = None
-        out.append({'title': title, 'year': year, 'douban_id': it.get('id') or it.get('id_str')})
+        out.append({'title': title, 'year': year, 'douban_id': it.get('id') or it.get('id_str'), 'source': 'douban'})
     return out
