@@ -5,14 +5,15 @@ from app.plugins import _PluginBase
 from app.schemas import NotificationType
 
 from .douban import hot as douban_hot
+from .rsshub import fetch_rsshub
 from .matching import score as score_title, good_enough
 from .providers.pansou import PanSouProvider
 from .providers.aipan import AiPanProvider
 
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
-    plugin_desc = "订阅豆瓣热门，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.1.1"
+    plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
+    plugin_version = "0.2.0"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -40,7 +41,7 @@ class AutoFollow115(_PluginBase):
     def get_api(self) -> List[Dict[str, Any]]:
         return [
             {"path": "/discover", "endpoint": self.api_discover, "methods": ["GET"], "auth": "apikey",
-             "summary": "获取热门列表", "description": "type=tv|movie"},
+             "summary": "获取热门列表(豆瓣m站+RSSHub)", "description": "type=tv|movie"},
             {"path": "/subscribe", "endpoint": self.api_subscribe, "methods": ["POST"], "auth": "apikey",
              "summary": "新增订阅", "description": "提交订阅模型"},
             {"path": "/list", "endpoint": self.api_list, "methods": ["GET"], "auth": "apikey",
@@ -57,6 +58,11 @@ class AutoFollow115(_PluginBase):
             {"type": "switch", "key": "prefer_pack", "props": {"label": "优先整季/全集包"}},
             {"type": "chips", "key": "quality_prefs", "props": {"label": "质量偏好", "multiple": True},
              "items": [{"text":"2160p"},{"text":"1080p"},{"text":"HEVC"},{"text":"HDR"},{"text":"WEB-DL"}]},
+            {"type": "subheader", "text": "RSSHub (豆瓣榜单)"},
+            {"type": "switch", "key": "enable_rsshub", "props": {"label": "启用 RSSHub 榜单聚合"}},
+            {"type": "text", "key": "rsshub_base", "props": {"label": "RSSHub 基址", "placeholder": "https://rss.hrtime.asia:4000"}},
+            {"type": "textarea", "key": "rsshub_movie_paths", "props": {"label": "电影路径(一行一个)", "rows": 3}},
+            {"type": "textarea", "key": "rsshub_tv_paths", "props": {"label": "剧集路径(一行一个)", "rows": 3}},
             {"type": "text", "key": "http_proxy", "props": {"label": "HTTP 代理(可选)", "placeholder": "http://host:port"}},
         ]
         defaults = {
@@ -64,12 +70,25 @@ class AutoFollow115(_PluginBase):
             "cron_scan": "*/30 * * * *",
             "prefer_pack": True,
             "quality_prefs": ["2160p", "HEVC", "HDR"],
+            "enable_rsshub": True,
+            "rsshub_base": "https://rss.hrtime.asia:4000",
+            "rsshub_movie_paths": "/douban/movie/weekly/movie_real_time_hotest\n/douban/movie/weekly/movie_showing",
+            "rsshub_tv_paths": "",
             "http_proxy": None
         }
         return form, defaults
 
     def get_page(self) -> Optional[List[dict]]:
         return [{"component": "v-alert", "props": {"type": "info", "text": "在“发现”页选择条目后订阅，命中将推送 115 链接至对话框"}}]
+
+    def _merge_discover(self, arr: List[Dict]) -> List[Dict]:
+        seen = set(); out: List[Dict] = []
+        for it in arr:
+            k = (it.get('title'), it.get('year'), it.get('douban_id'))
+            if k in seen:
+                continue
+            seen.add(k); out.append(it)
+        return out
 
     def get_service(self) -> List[Dict[str, Any]]:
         cron_scan = self._conf.get("cron_scan") or "*/30 * * * *"
@@ -79,25 +98,35 @@ class AutoFollow115(_PluginBase):
         ]
 
     def job_discover(self, **kwargs):
+        tv_list: List[Dict] = []
+        movie_list: List[Dict] = []
+        # Douban m-site baseline
         try:
-            self._discover_cache["tv"] = douban_hot('tv', 0, 20)
-            self._discover_cache["movie"] = douban_hot('movie', 0, 20)
+            tv_list.extend(douban_hot('tv', 0, 20))
+            movie_list.extend(douban_hot('movie', 0, 20))
         except Exception:
             pass
-
-    def _log(self, msg: str):
-        try:
-            # _PluginBase may provide logger
-            if hasattr(self, 'info'):
-                self.info(msg)
-            else:
-                print(msg)
-        except Exception:
-            pass
+        # RSSHub aggregation
+        if bool(self._conf.get('enable_rsshub', True)):
+            base = (self._conf.get('rsshub_base') or '').strip() or 'https://rss.hrtime.asia:4000'
+            proxy = self._conf.get('http_proxy')
+            def _split_lines(s: str) -> List[str]:
+                return [x.strip() for x in (s or '').splitlines() if x.strip()]
+            movie_paths = _split_lines(self._conf.get('rsshub_movie_paths') or '')
+            tv_paths = _split_lines(self._conf.get('rsshub_tv_paths') or '')
+            try:
+                movie_list.extend(fetch_rsshub(base, movie_paths, proxy=proxy))
+            except Exception:
+                pass
+            try:
+                tv_list.extend(fetch_rsshub(base, tv_paths, proxy=proxy))
+            except Exception:
+                pass
+        self._discover_cache['tv'] = self._merge_discover(tv_list)
+        self._discover_cache['movie'] = self._merge_discover(movie_list)
 
     def _push_115(self, title: str, url: str):
-        text = f"{title}
-{url}"
+        text = f"{title}\n{url}"
         self.post_message(mtype=NotificationType.Text, title="[115自动追剧] 命中", text=text)
 
     def job_scan(self, **kwargs):
@@ -118,14 +147,12 @@ class AutoFollow115(_PluginBase):
                 for r in rs:
                     r['score'] = r.get('score',0) + score_title(r.get('title') or q)
                 results.extend(rs)
-            # unique by url and sort by score
             seen = set(); uniq=[]
             for r in sorted(results, key=lambda x: x.get('score',0), reverse=True):
                 u = r.get('url');
                 if not u or u in seen:
                     continue
                 seen.add(u); uniq.append(r)
-            # dedup per sub title, push at most 1 per scan
             pushed = set(pushed_map.get(q, []) or [])
             pushed_this_round: List[str] = []
             for r in uniq:
@@ -136,11 +163,10 @@ class AutoFollow115(_PluginBase):
                     continue
                 self._push_115(q, u)
                 pushed_this_round.append(u)
-                break  # at most 1 per scan
+                break
             if pushed_this_round:
                 new_list = list(pushed.union(pushed_this_round))
                 pushed_map[q] = new_list
-        # persist dedup map
         self.save_data('pushed', pushed_map)
 
     def api_discover(self, request=None):
