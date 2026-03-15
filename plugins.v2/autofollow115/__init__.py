@@ -4,10 +4,8 @@ import re
 import json
 import datetime
 from typing import Any, Dict, List, Tuple
-try:
-    from app.plugins import Plugin, ServiceTask
-except Exception:
-    from app.core.plugin import Plugin, ServiceTask
+from app.plugins import _PluginBase
+from app.schemas import NotificationType
 
 from app.core.event import eventmanager
 from app.log import logger
@@ -19,7 +17,7 @@ plugin_name = 'AutoFollow115'
 plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
 plugin_icon = 'autofollow115.png'
 plugin_color = '#5E81AC'
-plugin_version = '0.5.6'
+plugin_version = '0.5.7'
 plugin_author = 'heruntime01'
 author_url = 'https://github.com/heruntime01'
 plugin_config_prefix = 'autofollow115_'
@@ -44,7 +42,7 @@ DEFAULT_RSSHUB_TV_PATHS = """
 RE_115 = re.compile(r'https?://115\.com/(?:s|f)/[A-Za-z0-9]+', re.I)
 RE_115_SHORT = re.compile(r'https?://115\.com/l/[A-Za-z0-9]+', re.I)
 
-class AutoFollow115(Plugin):
+class AutoFollow115(_PluginBase):
     _enabled: bool = True
     _logs: List[Dict[str, Any]]
 
@@ -178,14 +176,22 @@ class AutoFollow115(Plugin):
             ]}
         ]
 
-    def get_service(self) -> List[ServiceTask]:
+    def get_service(self) -> List[dict]:
+        if not self._enabled:
+            return []
         cfg = self.get_config() or {}
         cron_scan = cfg.get('cron_scan') or '*/30 * * * *'
-        return [
-            ServiceTask(name='autofollow115_scan', trigger=CronTrigger.from_crontab(cron_scan), func=self.job_scan)
-        ]
+        return [{
+            'id': 'AutoFollow115_scan',
+            'name': 'AutoFollow115 扫描',
+            'trigger': CronTrigger.from_crontab(cron_scan),
+            'func': self.job_scan,
+            'kwargs': {}
+        }]
 
     def stop_service(self):
+        pass
+(self):
         pass
 
     # ===== APIs =====
@@ -279,7 +285,7 @@ class AutoFollow115(Plugin):
                 continue
             link = links[0]
             msg = "[115自动追剧] 命中：" + str(s.get("title")) + chr(10) + str(link)
-            self.post_message('Text', msg)
+            self.post_message(mtype=NotificationType.Text, text=msg)
             prog = self.get_data('progress') or {}
             sid = s.get('id')
             pr = prog.get(sid, {'pushed': [], 'last_update': None, 'total_episodes': None})
