@@ -233,8 +233,8 @@
   },
   "AutoFollow115": {
     "history": {
-      "v0.3.0": "新增订阅进度统计：/list 汇总、/progress 详情；providers 捕获标题用于集数识别"
+      "v0.3.1": "总集数(豆瓣抓取, best-effort)、取消订阅/重置进度 API、进度细化"
     },
-    "version": "0.3.0"
+    "version": "0.3.1"
   }
 }
