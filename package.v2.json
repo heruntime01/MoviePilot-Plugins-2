@@ -238,9 +238,10 @@
       "v0.3.4": "修复设置页（显式 render_mode=vuetify），新增日志功能（APIs: GET /logs, POST /logs/clear；插件页日志表格）",
       "v0.3.5": "修复：配置页与详情页按 VForm/Vuetify 渲染；日志集成 app.log.logger；设置入口可见且可用",
       "v0.3.6": "对齐官方规范：新增 plugin_config_prefix/auth_level/author_url，插件图标使用文件名；配置/详情页继续按 VForm/Vuetify 渲染",
-      "v0.3.7": "商店高亮：release=true；修复与优化：设置/详情页渲染与日志功能微调（对齐官方规范）"
+      "v0.3.7": "商店高亮：release=true；修复与优化：设置/详情页渲染与日志功能微调（对齐官方规范）",
+      "v0.3.8": "修复：默认配置中 rsshub_*_paths 使用 \"\\n\".join 被错误换行导致 SyntaxError；改为三引号多行字符串；同时发布 Release 资产（- 与 _ 两种命名）"
     },
-    "version": "0.3.7",
+    "version": "0.3.8",
     "id": "autofollow115",
     "name": "115 自动追剧",
     "author": "Herun",
