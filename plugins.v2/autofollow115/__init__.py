@@ -1,70 +1,35 @@
-
 # -*- coding: utf-8 -*-
-import re
-import json
-import datetime
+import datetime, re
 from typing import Any, Dict, List, Tuple
 from app.plugins import _PluginBase
 from app.schemas import NotificationType
-
-from app.core.event import eventmanager
 from app.log import logger
+from app.core.event import eventmanager
 from apscheduler.triggers.cron import CronTrigger
-from urllib import request as _req, error as _err, parse as _parse
+from urllib import request as _req
 
-plugin_id = 'autofollow115'
-plugin_name = 'AutoFollow115'
-plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
-plugin_icon = 'autofollow115.png'
-plugin_color = '#5E81AC'
-plugin_version = '0.5.9'
-plugin_author = 'heruntime01'
-author_url = 'https://github.com/heruntime01'
-plugin_config_prefix = 'autofollow115_'
-auth_level = 1
-
-# ===== Defaults (triple-quoted constants) =====
-DEFAULT_RSSHUB_MOVIE_PATHS = """
-/douban/movie/weekly/movie_real_time_hotest
-/douban/movie/weekly/movie_showing
-/douban/movie/weekly/movie_most_watched
-/douban/movie/weekly/movie_high_score
-/douban/movie/weekly/movie_trending
-"""
-DEFAULT_RSSHUB_TV_PATHS = """
-/douban/tv/weekly/tv_real_time_hotest
-/douban/tv/weekly/tv_showing
-/douban/tv/weekly/tv_most_watched
-/douban/tv/weekly/tv_high_score
-/douban/tv/weekly/tv_trending
-"""
-
-RE_115 = re.compile(r'https?://115\.com/(?:s|f)/[A-Za-z0-9]+', re.I)
-RE_115_SHORT = re.compile(r'https?://115\.com/l/[A-Za-z0-9]+', re.I)
+from .ui import UIConfig
+from .handlers import parse_rsshub_titles, search_links_pansou, search_links_aipan
 
 class AutoFollow115(_PluginBase):
     plugin_name = 'AutoFollow115'
     plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
     plugin_icon = 'autofollow115.png'
     plugin_color = '#5E81AC'
-    plugin_version = '0.5.9'
+    plugin_version = '0.6.0'
     plugin_author = 'heruntime01'
     author_url = 'https://github.com/heruntime01'
     plugin_config_prefix = 'autofollow115_'
+    plugin_order = 30
     auth_level = 1
 
     _enabled: bool = True
     _logs: List[Dict[str, Any]]
 
-    @staticmethod
-    def get_render_mode() -> str:
-        return 'vuetify'
-
     def init_plugin(self, config: dict = None):
         cfg = config or {}
         self._enabled = bool(cfg.get('enabled', True))
         self._logs = self.get_data('logs') or []
-        # ensure storage keys
         self.save_data('subs', self.get_data('subs') or [])
         self.save_data('progress', self.get_data('progress') or {})
         self._log('info', 'plugin initialized')
@@ -72,118 +37,25 @@ class AutoFollow115(_PluginBase):
     def get_state(self) -> bool:
         return self._enabled
 
-    def get_api(self) -> List[Dict[str, Any]]:
-        return [
-            {'path': '/discover', 'methods': ['GET'], 'endpoint': self.api_discover},
-            {'path': '/subscribe', 'methods': ['POST'], 'endpoint': self.api_subscribe},
-            {'path': '/unsubscribe', 'methods': ['POST'], 'endpoint': self.api_unsubscribe},
-            {'path': '/reset_progress', 'methods': ['POST'], 'endpoint': self.api_reset_progress},
-            {'path': '/list', 'methods': ['GET'], 'endpoint': self.api_list},
-            {'path': '/progress', 'methods': ['GET'], 'endpoint': self.api_progress},
-            {'path': '/run', 'methods': ['POST'], 'endpoint': self.api_run},
-            {'path': '/logs', 'methods': ['GET'], 'endpoint': self.api_logs},
-            {'path': '/logs/clear', 'methods': ['POST'], 'endpoint': self.api_logs_clear},
-        ]
-
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
-        page = [
-            {"component": "v-form", "children": [
-                {"component": "v-row", "children": [
-                    {"component": "v-col", "props": {"cols": 12, "md": 4}, "children": [
-                        {"component": "v-switch", "props": {"model": "enabled", "label": "启用插件"}}
-                    ]},
-                    {"component": "v-col", "props": {"cols": 12, "md": 4}, "children": [
-                        {"component": "v-cron-field", "props": {"model": "cron_scan", "label": "扫描 Cron"}}
-                    ]},
-                    {"component": "v-col", "props": {"cols": 12, "md": 4}, "children": [
-                        {"component": "v-switch", "props": {"model": "prefer_pack", "label": "优先整季/全集包"}}
-                    ]}
-                ]},
-                {"component": "v-row", "children": [
-                    {"component": "v-col", "props": {"cols": 12, "md": 6}, "children": [
-                        {"component": "v-select", "props": {"model": "quality_prefs", "label": "质量偏好", "items": ["2160p", "1080p", "HEVC", "HDR", "WEB-DL"], "multiple": True, "chips": True}}
-                    ]},
-                    {"component": "v-col", "props": {"cols": 12, "md": 6}, "children": [
-                        {"component": "v-switch", "props": {"model": "validate_115", "label": "推送前校验 115 链接(HEAD)"}}
-                    ]}
-                ]},
-                {"component": "v-divider"},
-                {"component": "v-subheader", "props": {"text": "RSSHub (豆瓣榜单)"}},
-                {"component": "v-row", "children": [
-                    {"component": "v-col", "props": {"cols": 12, "md": 3}, "children": [
-                        {"component": "v-switch", "props": {"model": "enable_rsshub", "label": "启用 RSSHub"}}
-                    ]},
-                    {"component": "v-col", "props": {"cols": 12, "md": 9}, "children": [
-                        {"component": "v-text-field", "props": {"model": "rsshub_base", "label": "RSSHub 基址"}}
-                    ]}
-                ]},
-                {"component": "v-row", "children": [
-                    {"component": "v-col", "props": {"cols": 12, "md": 6}, "children": [
-                        {"component": "v-textarea", "props": {"model": "rsshub_movie_paths", "label": "电影路径(一行一个)", "rows": 6}}
-                    ]},
-                    {"component": "v-col", "props": {"cols": 12, "md": 6}, "children": [
-                        {"component": "v-textarea", "props": {"model": "rsshub_tv_paths", "label": "剧集路径(一行一个)", "rows": 6}}
-                    ]}
-                ]},
-                {"component": "v-divider"},
-                {"component": "v-subheader", "props": {"text": "可选：搜索源"}},
-                {"component": "v-row", "children": [
-                    {"component": "v-col", "props": {"cols": 12, "md": 6}, "children": [
-                        {"component": "v-switch", "props": {"model": "enable_pansou", "label": "启用 PanSou"}}
-                    ]},
-                    {"component": "v-col", "props": {"cols": 12, "md": 6}, "children": [
-                        {"component": "v-switch", "props": {"model": "enable_aipan", "label": "启用 AiPan"}}
-                    ]}
-                ]},
-                {"component": "v-row", "children": [
-                    {"component": "v-col", "props": {"cols": 12, "md": 12}, "children": [
-                        {"component": "v-text-field", "props": {"model": "http_proxy", "label": "HTTP 代理 (http://host:port)"}}
-                    ]}
-                ]}
-            ]}]
-        defaults = {
-            'enabled': True,
-            'cron_scan': '*/30 * * * *',
-            'prefer_pack': True,
-            'quality_prefs': ['2160p','HEVC','HDR'],
-            'validate_115': False,
-            'enable_rsshub': True,
-            'rsshub_base': 'https://rss.hrtime.asia:4000',
-            'rsshub_movie_paths': DEFAULT_RSSHUB_MOVIE_PATHS,
-            'rsshub_tv_paths': DEFAULT_RSSHUB_TV_PATHS,
-            'enable_pansou': True,
-            'enable_aipan': True,
-            'http_proxy': None,
-        }
-        return page, defaults
+        return UIConfig.get_form()
 
     def get_page(self) -> List[dict]:
         subs = self.get_data('subs') or []
         prog = self.get_data('progress') or {}
-        headers = [
-            {'title': '标题', 'key': 'title', 'sortable': True},
-            {'title': '类型', 'key': 'type'},
-            {'title': '年份', 'key': 'year'},
-            {'title': '总集数', 'key': 'total_episodes'},
-            {'title': '已推送', 'key': 'pushed_count'},
-            {'title': '最后更新', 'key': 'last_update'}
-        ]
-        rows = []
-        for s in subs:
-            sid = s.get('id') or s.get('title')
-            pr = prog.get(sid, {})
-            rows.append({
-                'title': s.get('title'),
-                'type': s.get('type'),
-                'year': s.get('year'),
-                'total_episodes': pr.get('total_episodes'),
-                'pushed_count': len(pr.get('pushed') or []),
-                'last_update': pr.get('last_update')
-            })
+        return UIConfig.get_page(subs, prog)
+
+    def get_api(self) -> List[Dict[str, Any]]:
         return [
-            {"component": "v-card", "props": {"title": "AutoFollow115 订阅与进度"}, "children": [
-                {"component": "v-data-table", "props": {"headers": headers, "items": rows, "items-per-page": 10}}
-            ]}
+            {'path': '/discover', 'methods': ['GET'], 'endpoint': self.api_discover, 'summary': '发现候选'},
+            {'path': '/subscribe', 'methods': ['POST'], 'endpoint': self.api_subscribe, 'summary': '订阅'},
+            {'path': '/unsubscribe', 'methods': ['POST'], 'endpoint': self.api_unsubscribe, 'summary': '退订'},
+            {'path': '/reset_progress', 'methods': ['POST'], 'endpoint': self.api_reset_progress, 'summary': '重置进度'},
+            {'path': '/list', 'methods': ['GET'], 'endpoint': self.api_list, 'summary': '订阅列表'},
+            {'path': '/progress', 'methods': ['GET'], 'endpoint': self.api_progress, 'summary': '进度'},
+            {'path': '/run', 'methods': ['POST'], 'endpoint': self.api_run, 'summary': '立即扫描'},
+            {'path': '/logs', 'methods': ['GET'], 'endpoint': self.api_logs, 'summary': '日志'},
+            {'path': '/logs/clear', 'methods': ['POST'], 'endpoint': self.api_logs_clear, 'summary': '清空日志'},
         ]
 
     def get_service(self) -> List[dict]:
@@ -191,13 +63,24 @@ class AutoFollow115(_PluginBase):
             return []
         cfg = self.get_config() or {}
         cron_scan = cfg.get('cron_scan') or '*/30 * * * *'
-        return [{
-            'id': 'AutoFollow115_scan',
-            'name': 'AutoFollow115 扫描',
-            'trigger': CronTrigger.from_crontab(cron_scan),
-            'func': self.job_scan,
-            'kwargs': {}
-        }]
+        try:
+            trig = CronTrigger.from_crontab(cron_scan)
+            return [{
+                'id': 'AutoFollow115_scan',
+                'name': 'AutoFollow115 扫描',
+                'trigger': trig,
+                'func': self.job_scan,
+                'kwargs': {}
+            }]
+        except Exception as e:
+            logger.warning('Cron 表达式无效：' + str(cron_scan) + '；回退 interval=30min；' + str(e))
+            return [{
+                'id': 'AutoFollow115_scan',
+                'name': 'AutoFollow115 扫描',
+                'trigger': 'interval',
+                'func': self.job_scan,
+                'kwargs': {'minutes': 30}
+            }]
 
     def stop_service(self):
         pass
@@ -208,7 +91,7 @@ class AutoFollow115(_PluginBase):
             items = list(self._discover_from_rsshub())
             return self.success(data={'items': items})
         except Exception as e:
-            self._log('error', f'discover failed: {e}')
+            self._log('error', 'discover failed: ' + str(e))
             return self.error(str(e))
 
     def api_subscribe(self, **kwargs):
@@ -219,7 +102,7 @@ class AutoFollow115(_PluginBase):
         if not title:
             return self.error('title required')
         subs = self.get_data('subs') or []
-        sid = f"{title}:{tp}:{year}" if year else f"{title}:{tp}"
+        sid = (title + ':' + tp + ((':' + str(year)) if year else ''))
         if any((s.get('id')==sid) for s in subs):
             return self.success(msg='already subscribed')
         subs.append({'id': sid, 'title': title, 'type': tp, 'year': year})
@@ -271,7 +154,6 @@ class AutoFollow115(_PluginBase):
         return self.success(msg='cleared')
 
     # ===== Jobs =====
-    
     def job_scan(self):
         if not self._enabled:
             return
@@ -285,14 +167,14 @@ class AutoFollow115(_PluginBase):
         for s in subs:
             links = []
             if enable_pansou:
-                links += self._search_links_pansou(s.get('title'))
+                links += search_links_pansou(s.get('title'))
             if enable_aipan:
-                links += self._search_links_aipan(s.get('title'))
+                links += search_links_aipan(s.get('title'))
             links = list({*links})
             if not links:
                 continue
             link = links[0]
-            msg = "[115自动追剧] 命中：" + str(s.get("title")) + chr(10) + str(link)
+            msg = '[115自动追剧] 命中：' + str(s.get('title')) + chr(10) + str(link)
             self.post_message(mtype=NotificationType.Plugin, title='AutoFollow115', text=msg)
             prog = self.get_data('progress') or {}
             sid = s.get('id')
@@ -303,9 +185,10 @@ class AutoFollow115(_PluginBase):
             self.save_data('progress', prog)
             pushed_any = True
         if pushed_any:
-            self._log('info', f'push done for {len(subs)} subs')
+            self._log('info', 'push done for ' + str(len(subs)) + ' subs')
 
-    def _discover_from_rsshub(self) -> List[Dict[str, Any]]:
+    # ===== Discover =====
+    def _discover_from_rsshub(self):
         cfg = self.get_config() or {}
         if not cfg.get('enable_rsshub', True):
             return []
@@ -313,65 +196,35 @@ class AutoFollow115(_PluginBase):
         paths = []
         mps = (cfg.get('rsshub_movie_paths') or '').strip().splitlines()
         tvps = (cfg.get('rsshub_tv_paths') or '').strip().splitlines()
-        for p in [*mps, *tvps]:
-            p = p.strip()
+        for p in list(mps) + list(tvps):
+            p = (p or '').strip()
             if not p:
                 continue
-            url = f"{base}{p if p.startswith('/') else '/' + p}"
+            url = base + (p if p.startswith('/') else '/' + p)
             try:
-                req = _req.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                req = _req.Request(url, headers={'User-Agent':'Mozilla/5.0'})
                 with _req.urlopen(req, timeout=15) as resp:
-                    txt = resp.read().decode('utf-8', 'ignore')
-                # 粗提取：从 <item><title>…</title> 抓标题
-                titles = re.findall(r'<title><!\[CDATA\[(.*?)\]\]></title>|<title>(.*?)</title>', txt, re.I)
-                for t1, t2 in titles[:20]:
-                    t = (t1 or t2 or '').strip()
-                    if not t or t.lower().startswith('rsshub'):
-                        continue
-                    yield_item = {'title': t, 'source': 'rsshub', 'path': p}
-                    # 类型粗判
-                    yield_item['type'] = 'movie' if '/movie/' in p else 'tv'
-                    yield_item['year'] = None
-                    yield_item['score'] = None
-                    yield_item['hot'] = True
-                    # 为列表返回
-                    yield yield_item
+                    txt = resp.read().decode('utf-8','ignore')
+                titles = parse_rsshub_titles(txt, 20)
+                for t in titles:
+                    item = {'title': t, 'source': 'rsshub', 'path': p}
+                    item['type'] = 'movie' if '/movie/' in p else 'tv'
+                    item['year'] = None
+                    item['score'] = None
+                    item['hot'] = True
+                    yield item
             except Exception as e:
-                self._log('warn', f'rsshub fetch fail: {p} -> {e}')
+                self._log('warn', 'rsshub fetch fail: ' + p + ' -> ' + str(e))
         return []
-
-    def _search_links_pansou(self, kw: str) -> List[str]:
-        try:
-            url = f"https://www.pansou.vip/s/{_parse.quote(kw)}"
-            req = _req.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with _req.urlopen(req, timeout=15) as resp:
-                html = resp.read().decode('utf-8', 'ignore')
-            ls = list(set(re.findall(RE_115, html) + re.findall(RE_115_SHORT, html)))
-            return ls[:20]
-        except Exception as e:
-            self._log('warn', f'pansou error: {e}')
-            return []
-
-    def _search_links_aipan(self, kw: str) -> List[str]:
-        try:
-            url = f"https://www.aipan.me/search?k={_parse.quote(kw)}"
-            req = _req.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with _req.urlopen(req, timeout=15) as resp:
-                html = resp.read().decode('utf-8', 'ignore')
-            ls = list(set(re.findall(RE_115, html) + re.findall(RE_115_SHORT, html)))
-            return ls[:20]
-        except Exception as e:
-            self._log('warn', f'aipan error: {e}')
-            return []
 
     # ===== Utils =====
     def _log(self, level: str, msg: str):
         rec = {'time': datetime.datetime.now().strftime('%H:%M:%S'), 'level': level, 'msg': msg}
-        self._logs.append(rec)
-        self._logs = self._logs[-1000:]
+        logs = self._logs or []
+        logs.append(rec)
+        self._logs = logs[-1000:]
         self.save_data('logs', self._logs)
         try:
-            getattr(logger, level if hasattr(logger, level) else 'info')(f'[autofollow115] {msg}')
+            getattr(logger, level if hasattr(logger, level) else 'info')('[autofollow115] ' + msg)
         except Exception:
-            logger.info(f'[autofollow115] {msg}')
-
+            logger.info('[autofollow115] ' + msg)
