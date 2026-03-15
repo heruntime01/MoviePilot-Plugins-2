@@ -20,7 +20,7 @@ class AutoFollow115(_PluginBase):
     plugin_desc = '自动追剧/电影到 115：发现→筛选→订阅→搜索→推送→进度（独立于系统订阅）'
     plugin_icon = 'autofollow115.png'
     plugin_color = '#5E81AC'
-    plugin_version = '0.6.4'
+    plugin_version = '0.6.5'
     plugin_author = 'heruntime01'
     author_url = 'https://github.com/heruntime01'
     plugin_config_prefix = 'autofollow115_'
@@ -122,11 +122,7 @@ class AutoFollow115(_PluginBase):
 /douban/movie/weekly/movie_trending
 """,
             'rsshub_tv_paths': """
-/douban/tv/weekly/tv_real_time_hotest
-/douban/tv/weekly/tv_showing
-/douban/tv/weekly/tv_most_watched
-/douban/tv/weekly/tv_high_score
-/douban/tv/weekly/tv_trending
+/douban/movie/weekly/tv_hot
 """,
             'filter_regions': [],
             'filter_genres': [],
@@ -153,7 +149,7 @@ class AutoFollow115(_PluginBase):
                 {'component':'VCardText','text': (region or '') + ' ' + ('/'.join(genres) if genres else '')},
                 {'component':'VCardActions','content':[
                     {'component':'VBtn','props':{'size':'small','color':'primary'},'text':'订阅','events':{'click':{'api':'plugin/AutoFollow115/subscribe','method':'post','params':{'title':title,'type':mtype,'year':year,'apikey': settings.API_TOKEN}}}},
-                    {'component':'VBtn','props':{'size':'small','variant':'text'},'text':'豆瓣','events':{'click':{'api':'open','method':'get','params':{'url':'https://movie.douban.com/subject/'+str(douban)}}}},
+                    {'component':'VBtn','props':{'size':'small','variant':'text'},'text':'豆瓣','events':{'click':{'api':'open','method':'get','params':{'url':'https://movie.douban.com/subject/'+str(douban) if douban else 'https://movie.douban.com/'}}}},
                 ]}
             ]})
         grid={'component':'div','props':{'class':'grid gap-3 grid-info-card'},'content':cards}
@@ -360,14 +356,18 @@ class AutoFollow115(_PluginBase):
         paths = [p.strip() for p in (list(mps)+list(tvps)) if (p and p.strip())]
         for p in paths:
             url = base + (p if p.startswith('/') else '/' + p)
+            total=0; empty_link=0; yielded=0
             try:
                 xml = self._http_get(url)
                 for item_xml in re.split(r'</item>', xml, flags=re.I):
                     title = self._xml_tag(item_xml, 'title')
                     link = self._xml_tag(item_xml, 'link')
                     desc = self._xml_tag(item_xml, 'description')
-                    if (not title) and (not link):
+                    if not (title or link):
                         continue
+                    total += 1
+                    if not (link and link.strip()):
+                        empty_link += 1
                     poster = self._first_img(desc)
                     doubanid = self._first_douban_id(link)
                     region = self._extract_region(desc)
@@ -375,7 +375,9 @@ class AutoFollow115(_PluginBase):
                     item={'title': title, 'poster': poster, 'link': link, 'douban': doubanid, 'region': region, 'genres': genres}
                     item['type']='movie' if '/movie/' in p else 'tv'
                     item['year']=self._extract_year(desc)
+                    yielded += 1
                     yield item
+                self._log_step('discover', 'rsshub parsed', {'path': p, 'total': total, 'empty_link': empty_link, 'yielded': yielded})
             except Exception as e:
                 self._log_step('discover', 'rsshub fetch fail', {'path': p, 'error': str(e)})
         return []
@@ -403,6 +405,8 @@ class AutoFollow115(_PluginBase):
         if not link:
             return ''
         m = re.search(r'/subject/(\d+)', link)
+        if not m:
+            m = re.search(r'/(\d{5,})(?:$|[/?#])', link)
         return (m.group(1) if m else '')
 
     def _extract_year(self, text: str) -> str:
