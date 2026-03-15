@@ -20,5 +20,8 @@ class AiPanProvider(SearchProvider):
                 continue
         if not html:
             return []
+        items = self.extract_items_with_titles(html)
+        if items:
+            return [{"title": t or query, "url": u, "provider": self.name, "score": 0} for (u,t) in items]
         links = self.extract_115(html)
         return [{"title": query, "url": u, "provider": self.name, "score": 0} for u in links]
