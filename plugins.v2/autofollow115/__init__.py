@@ -17,7 +17,7 @@ plugin_name = 'AutoFollow115'
 plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
 plugin_icon = 'autofollow115.png'
 plugin_color = '#5E81AC'
-plugin_version = '0.5.8'
+plugin_version = '0.5.9'
 plugin_author = 'heruntime01'
 author_url = 'https://github.com/heruntime01'
 plugin_config_prefix = 'autofollow115_'
@@ -43,6 +43,16 @@ RE_115 = re.compile(r'https?://115\.com/(?:s|f)/[A-Za-z0-9]+', re.I)
 RE_115_SHORT = re.compile(r'https?://115\.com/l/[A-Za-z0-9]+', re.I)
 
 class AutoFollow115(_PluginBase):
+    plugin_name = 'AutoFollow115'
+    plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
+    plugin_icon = 'autofollow115.png'
+    plugin_color = '#5E81AC'
+    plugin_version = '0.5.9'
+    plugin_author = 'heruntime01'
+    author_url = 'https://github.com/heruntime01'
+    plugin_config_prefix = 'autofollow115_'
+    auth_level = 1
+
     _enabled: bool = True
     _logs: List[Dict[str, Any]]
 
@@ -64,15 +74,15 @@ class AutoFollow115(_PluginBase):
 
     def get_api(self) -> List[Dict[str, Any]]:
         return [
-            {'path': '/discover', 'methods': ['GET'], 'func': self.api_discover},
-            {'path': '/subscribe', 'methods': ['POST'], 'func': self.api_subscribe},
-            {'path': '/unsubscribe', 'methods': ['POST'], 'func': self.api_unsubscribe},
-            {'path': '/reset_progress', 'methods': ['POST'], 'func': self.api_reset_progress},
-            {'path': '/list', 'methods': ['GET'], 'func': self.api_list},
-            {'path': '/progress', 'methods': ['GET'], 'func': self.api_progress},
-            {'path': '/run', 'methods': ['POST'], 'func': self.api_run},
-            {'path': '/logs', 'methods': ['GET'], 'func': self.api_logs},
-            {'path': '/logs/clear', 'methods': ['POST'], 'func': self.api_logs_clear},
+            {'path': '/discover', 'methods': ['GET'], 'endpoint': self.api_discover},
+            {'path': '/subscribe', 'methods': ['POST'], 'endpoint': self.api_subscribe},
+            {'path': '/unsubscribe', 'methods': ['POST'], 'endpoint': self.api_unsubscribe},
+            {'path': '/reset_progress', 'methods': ['POST'], 'endpoint': self.api_reset_progress},
+            {'path': '/list', 'methods': ['GET'], 'endpoint': self.api_list},
+            {'path': '/progress', 'methods': ['GET'], 'endpoint': self.api_progress},
+            {'path': '/run', 'methods': ['POST'], 'endpoint': self.api_run},
+            {'path': '/logs', 'methods': ['GET'], 'endpoint': self.api_logs},
+            {'path': '/logs/clear', 'methods': ['POST'], 'endpoint': self.api_logs_clear},
         ]
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
@@ -283,7 +293,7 @@ class AutoFollow115(_PluginBase):
                 continue
             link = links[0]
             msg = "[115自动追剧] 命中：" + str(s.get("title")) + chr(10) + str(link)
-            self.post_message(mtype=NotificationType.Text, text=msg)
+            self.post_message(mtype=NotificationType.Plugin, title='AutoFollow115', text=msg)
             prog = self.get_data('progress') or {}
             sid = s.get('id')
             pr = prog.get(sid, {'pushed': [], 'last_update': None, 'total_episodes': None})
