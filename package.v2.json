@@ -248,9 +248,10 @@
       "v0.5.3": "修复：job_scan 缩进错误；post_message 文本安全换行；补齐 urllib.parse 导入并统一 _parse.quote；发布双命名资产（保持 NEW）",
       "v0.5.4": "修复：/discover 返回生成器导致序列化问题，改为 list(self._discover_from_rsshub())；细节清理",
       "v0.5.5": "修复：移除字符串中的 \"\\n\"，统一改为 chr(10) 拼接，避免被折行为实际换行导致的 SyntaxError；稳定性清理",
-      "v0.5.6": "兼容性：优先从 app.plugins 导入，失败回退 app.core.plugin 导入 Plugin/ServiceTask；继续使用 chr(10) 换行；保持 NEW 高亮"
+      "v0.5.6": "兼容性：优先从 app.plugins 导入，失败回退 app.core.plugin 导入 Plugin/ServiceTask；继续使用 chr(10) 换行；保持 NEW 高亮",
+      "v0.5.7": "兼容性：改用 _PluginBase 作为基类；get_service 返回 dict 列表（id/name/trigger/func）；post_message 使用 NotificationType；保留此前换行与导入修复"
     },
-    "version": "0.5.6",
+    "version": "0.5.7",
     "id": "autofollow115",
     "name": "115 自动追剧",
     "author": "Herun",
