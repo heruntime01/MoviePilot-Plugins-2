@@ -11,12 +11,13 @@ from .providers.pansou import PanSouProvider
 from .providers.aipan import AiPanProvider
 from .providers.nullbr import NullBRProvider
 
+import re
 import datetime
 
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.2.4"
+    plugin_version = "0.3.0"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -43,7 +44,9 @@ class AutoFollow115(_PluginBase):
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
-        return [{"cmd": "/af115", "event": None, "desc": "显示插件说明/快速命令", "category": "订阅"}]
+        return [
+            {"cmd": "/af115", "event": None, "desc": "显示插件说明/快速命令", "category": "订阅"}
+        ]
 
     def get_api(self) -> List[Dict[str, Any]]:
         return [
@@ -52,7 +55,9 @@ class AutoFollow115(_PluginBase):
             {"path": "/subscribe", "endpoint": self.api_subscribe, "methods": ["POST"], "auth": "apikey",
              "summary": "新增订阅", "description": "字段: type/title/year，可选 include/exclude/max_daily"},
             {"path": "/list", "endpoint": self.api_list, "methods": ["GET"], "auth": "apikey",
-             "summary": "订阅清单", "description": ""},
+             "summary": "订阅清单", "description": "返回订阅+进度概览"},
+            {"path": "/progress", "endpoint": self.api_progress, "methods": ["GET"], "auth": "apikey",
+             "summary": "订阅进度", "description": "返回每个订阅的剧集进度/总数"},
             {"path": "/run", "endpoint": self.api_run, "methods": ["POST"], "auth": "apikey",
              "summary": "手动触发扫描", "description": ""},
         ]
@@ -105,7 +110,8 @@ class AutoFollow115(_PluginBase):
         return form, defaults
 
     def get_page(self) -> Optional[List[dict]]:
-        return [{"component": "v-alert", "props": {"type": "info", "text": "在“发现”页选择条目后订阅，命中将推送 115 链接至对话框"}}]
+        # Simple footer note; UI can call /autofollow115/progress to show details
+        return [{"component": "v-alert", "props": {"type": "info", "text": "发现/订阅/扫描已启用。进度可调用 /autofollow115/progress 获取。"}}]
 
     def _merge_discover(self, arr: List[Dict]) -> List[Dict]:
         seen = set(); out: List[Dict] = []
@@ -131,11 +137,8 @@ class AutoFollow115(_PluginBase):
             mv = douban_hot('movie', 0, 20) or []
             tv_list.extend(tv)
             movie_list.extend(mv)
-            if hasattr(self, 'info'):
-                self.info(f"douban hot tv={len(tv)} movie={len(mv)}")
-        except Exception as e:
-            if hasattr(self, 'info'):
-                self.info(f"douban hot error: {e}")
+        except Exception:
+            pass
         if bool(self._conf.get('enable_rsshub', True)):
             base = (self._conf.get('rsshub_base') or '').strip() or 'https://rss.hrtime.asia:4000'
             proxy = self._conf.get('http_proxy')
@@ -144,57 +147,53 @@ class AutoFollow115(_PluginBase):
             movie_paths = _split_lines(self._conf.get('rsshub_movie_paths') or '')
             tv_paths = _split_lines(self._conf.get('rsshub_tv_paths') or '')
             try:
-                m2 = fetch_rsshub(base, movie_paths, proxy=proxy)
-                movie_list.extend(m2)
-                if hasattr(self, 'info'):
-                    self.info(f"rsshub movie items={len(m2)}")
-            except Exception as e:
-                if hasattr(self, 'info'):
-                    self.info(f"rsshub movie error: {e}")
+                movie_list.extend(fetch_rsshub(base, movie_paths, proxy=proxy))
+            except Exception:
+                pass
             try:
-                t2 = fetch_rsshub(base, tv_paths, proxy=proxy)
-                tv_list.extend(t2)
-                if hasattr(self, 'info'):
-                    self.info(f"rsshub tv items={len(t2)}")
-            except Exception as e:
-                if hasattr(self, 'info'):
-                    self.info(f"rsshub tv error: {e}")
+                tv_list.extend(fetch_rsshub(base, tv_paths, proxy=proxy))
+            except Exception:
+                pass
         self._discover_cache['tv'] = self._merge_discover(tv_list)
         self._discover_cache['movie'] = self._merge_discover(movie_list)
-        if hasattr(self, 'info'):
-            self.info(f"discover cached tv={len(self._discover_cache['tv'])} movie={len(self._discover_cache['movie'])}")
 
     def _push_115(self, title: str, url: str):
         text = f"{title}\n{url}"
         self.post_message(mtype=NotificationType.Text, title="[115自动追剧] 命中", text=text)
 
-    def _check_url_head(self, url: str, timeout: int=3) -> bool:
-        try:
-            import urllib.request as ur
-            req = ur.Request(url, method='HEAD', headers={'User-Agent':'Mozilla/5.0'})
-            opener = ur.build_opener()
-            with opener.open(req, timeout=timeout) as resp:
-                return 200 <= getattr(resp, 'status', resp.getcode()) < 400
-        except Exception:
-            return False
+    @staticmethod
+    def _extract_episode_num(text: str) -> Optional[int]:
+        t = text or ''
+        for pat in [r'[Ee]P?(\d{1,3})', r'第(\d{1,3})[集话]']:
+            m = re.search(pat, t)
+            if m:
+                try:
+                    return int(m.group(1))
+                except Exception:
+                    return None
+        return None
 
-    def _match_filters(self, title: str, include: Optional[List[str]|str], exclude: Optional[List[str]|str]) -> bool:
-        t = (title or '').lower()
-        def _list(x):
-            if x is None:
-                return []
-            if isinstance(x, list):
-                return [str(i).strip().lower() for i in x if str(i).strip()]
-            # string: split by comma/space
-            parts = [p.strip() for p in str(x).replace('，', ',').split(',')]
-            return [p.lower() for p in parts if p]
-        inc = _list(include)
-        exc = _list(exclude)
-        if inc and not any(k in t for k in inc):
-            return False
-        if exc and any(k in t for k in exc):
-            return False
-        return True
+    @staticmethod
+    def _is_pack(text: str) -> bool:
+        t = (text or '').lower()
+        return bool(re.search(r'(全集|全季|合集|complete)', t))
+
+    def _record_progress(self, sub: Dict[str, Any], item: Dict[str, Any]):
+        prog: Dict[str, Any] = self.get_data('progress') or {}
+        key = sub.get('title')
+        if not key:
+            return
+        entry = prog.get(key) or {"episodes": [], "pack": False, "last_update": None}
+        title = item.get('title') or key
+        if self._is_pack(title):
+            entry['pack'] = True
+        ep = self._extract_episode_num(title) or self._extract_episode_num(item.get('url') or '')
+        if ep:
+            if ep not in entry['episodes']:
+                entry['episodes'].append(ep)
+        entry['last_update'] = datetime.datetime.now().isoformat(timespec='seconds')
+        prog[key] = entry
+        self.save_data('progress', prog)
 
     def job_scan(self, **kwargs):
         subs = self.get_data("subs") or []
@@ -212,9 +211,7 @@ class AutoFollow115(_PluginBase):
             for p in self._providers:
                 try:
                     rs = p.search(q, sub.get('type') or 'tv', sub.get('year'))
-                except Exception as e:
-                    if hasattr(self, 'info'):
-                        self.info(f"provider {getattr(p,'name','?')} error: {e}")
+                except Exception:
                     rs = []
                 for r in rs:
                     r['score'] = r.get('score',0) + score_title(r.get('title') or q)
@@ -226,7 +223,7 @@ class AutoFollow115(_PluginBase):
                     continue
                 seen.add(u); uniq.append(r)
             pushed = set(pushed_map.get(q, []) or [])
-            # daily limit per sub (default 3 if provided in sub)
+            # daily limit per sub (default 3)
             sub_limit = 3
             try:
                 sub_limit = int(sub.get('max_daily', 3))
@@ -244,12 +241,26 @@ class AutoFollow115(_PluginBase):
                 if not u or u in pushed:
                     continue
                 title = r.get('title') or q
-                if not self._match_filters(title, include, exclude):
+                # include/exclude filters
+                t_low = title.lower()
+                def _lst(x):
+                    if x is None:
+                        return []
+                    if isinstance(x, list):
+                        return [str(i).strip().lower() for i in x if str(i).strip()]
+                    parts = [p.strip() for p in str(x).replace('，', ',').split(',')]
+                    return [p.lower() for p in parts if p]
+                inc = _lst(include); exc = _lst(exclude)
+                if inc and not any(k in t_low for k in inc):
+                    continue
+                if exc and any(k in t_low for k in exc):
                     continue
                 if not good_enough(title, sub.get('year'), prefer_pack=bool(self._conf.get('prefer_pack', True))):
                     continue
                 if validate and not self._check_url_head(u):
                     continue
+                # record progress before push
+                self._record_progress(sub, r)
                 self._push_115(q, u)
                 pushed_this_round.append(u)
                 today_count += 1
@@ -261,6 +272,16 @@ class AutoFollow115(_PluginBase):
                 push_count[q] = sub_count_map
         self.save_data('pushed', pushed_map)
         self.save_data('push_count', push_count)
+
+    def _check_url_head(self, url: str, timeout: int=3) -> bool:
+        try:
+            import urllib.request as ur
+            req = ur.Request(url, method='HEAD', headers={'User-Agent':'Mozilla/5.0'})
+            opener = ur.build_opener()
+            with opener.open(req, timeout=timeout) as resp:
+                return 200 <= getattr(resp, 'status', resp.getcode()) < 400
+        except Exception:
+            return False
 
     def api_discover(self, request=None):
         t = (request.query_params.get("type") if request else None) or "tv"
@@ -274,7 +295,43 @@ class AutoFollow115(_PluginBase):
         return {"ok": True}
 
     def api_list(self, request=None):
-        return {"subs": self.get_data("subs") or []}
+        subs = self.get_data("subs") or []
+        prog = self.get_data('progress') or {}
+        # summary per sub
+        out = []
+        for s in subs:
+            key = s.get('title')
+            p = prog.get(key) or {}
+            eps = sorted((p.get('episodes') or []))
+            out.append({
+                'title': key,
+                'type': s.get('type'),
+                'year': s.get('year'),
+                'episodes_count': len(eps),
+                'last_episode': (eps[-1] if eps else None),
+                'pack': p.get('pack') or False,
+                'last_update': p.get('last_update'),
+            })
+        return {'subs': out}
+
+    def api_progress(self, request=None):
+        subs = self.get_data("subs") or []
+        prog = self.get_data('progress') or {}
+        out = []
+        for s in subs:
+            key = s.get('title')
+            p = prog.get(key) or {}
+            eps = sorted((p.get('episodes') or []))
+            out.append({
+                'title': key,
+                'type': s.get('type'),
+                'year': s.get('year'),
+                'episodes': eps,
+                'episodes_count': len(eps),
+                'pack': p.get('pack') or False,
+                'last_update': p.get('last_update'),
+            })
+        return {'progress': out}
 
     def api_run(self, request=None):
         self.job_scan()
