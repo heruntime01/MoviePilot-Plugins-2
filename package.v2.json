@@ -243,6 +243,18 @@
     "icon": "icons/autofollow115.png",
     "homepage": "https://github.com/heruntime01/MoviePilot-Plugins-2/tree/main/plugins.v2/autofollow115",
     "render": "vuetify",
-    "description": "自动追剧/追片：豆瓣+RSSHub 发现，PanSou/AiPan/NullBR 搜索，命中后推送 115 链接到对话框自动转存"
+    "description": "自动追剧/追片：豆瓣+RSSHub 发现，PanSou/AiPan/NullBR 搜索，命中后推送 115 链接到对话框自动转存",
+    "category": "订阅/自动化",
+    "tags": [
+      "115",
+      "追剧",
+      "豆瓣",
+      "RSSHub",
+      "网盘",
+      "PanSou",
+      "AiPan",
+      "NullBR",
+      "自动转存"
+    ]
   }
 }
