@@ -12,7 +12,7 @@ from .providers.aipan import AiPanProvider
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.1.0"
+    plugin_version = "0.1.1"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -85,6 +85,16 @@ class AutoFollow115(_PluginBase):
         except Exception:
             pass
 
+    def _log(self, msg: str):
+        try:
+            # _PluginBase may provide logger
+            if hasattr(self, 'info'):
+                self.info(msg)
+            else:
+                print(msg)
+        except Exception:
+            pass
+
     def _push_115(self, title: str, url: str):
         text = f"{title}
 {url}"
@@ -92,9 +102,9 @@ class AutoFollow115(_PluginBase):
 
     def job_scan(self, **kwargs):
         subs = self.get_data("subs") or []
-        prefer_pack = bool(self._conf.get('prefer_pack', True))
         if not subs:
             return
+        pushed_map: Dict[str, List[str]] = self.get_data('pushed') or {}
         for sub in subs:
             q = sub.get('title')
             if not q:
@@ -108,17 +118,30 @@ class AutoFollow115(_PluginBase):
                 for r in rs:
                     r['score'] = r.get('score',0) + score_title(r.get('title') or q)
                 results.extend(rs)
-            # unique by url
+            # unique by url and sort by score
             seen = set(); uniq=[]
             for r in sorted(results, key=lambda x: x.get('score',0), reverse=True):
                 u = r.get('url');
                 if not u or u in seen:
                     continue
                 seen.add(u); uniq.append(r)
-            # pick top few
-            for r in uniq[:3]:
-                if good_enough(r.get('title') or q, sub.get('year'), prefer_pack=prefer_pack):
-                    self._push_115(q, r['url'])
+            # dedup per sub title, push at most 1 per scan
+            pushed = set(pushed_map.get(q, []) or [])
+            pushed_this_round: List[str] = []
+            for r in uniq:
+                u = r.get('url')
+                if not u or u in pushed:
+                    continue
+                if not good_enough(r.get('title') or q, sub.get('year'), prefer_pack=bool(self._conf.get('prefer_pack', True))):
+                    continue
+                self._push_115(q, u)
+                pushed_this_round.append(u)
+                break  # at most 1 per scan
+            if pushed_this_round:
+                new_list = list(pushed.union(pushed_this_round))
+                pushed_map[q] = new_list
+        # persist dedup map
+        self.save_data('pushed', pushed_map)
 
     def api_discover(self, request=None):
         t = (request.query_params.get("type") if request else None) or "tv"
