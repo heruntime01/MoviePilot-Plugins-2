@@ -9,11 +9,12 @@ from .rsshub import fetch_rsshub
 from .matching import score as score_title, good_enough
 from .providers.pansou import PanSouProvider
 from .providers.aipan import AiPanProvider
+from .providers.nullbr import NullBRProvider
 
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.2.1"
+    plugin_version = "0.2.2"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -29,7 +30,12 @@ class AutoFollow115(_PluginBase):
         self._conf = config or {}
         self._enabled = bool(self._conf.get("enabled", True))
         proxy = self._conf.get('http_proxy')
-        self._providers = [PanSouProvider(proxy=proxy), AiPanProvider(proxy=proxy)]
+        provs = [PanSouProvider(proxy=proxy), AiPanProvider(proxy=proxy)]
+        # NullBR optional
+        if bool(self._conf.get('enable_nullbr')):
+            base = (self._conf.get('nullbr_base') or '').strip()
+            provs.append(NullBRProvider(base=base, proxy=proxy))
+        self._providers = provs
 
     def get_state(self) -> bool:
         return self._enabled
@@ -63,6 +69,9 @@ class AutoFollow115(_PluginBase):
             {"type": "text", "key": "rsshub_base", "props": {"label": "RSSHub 基址", "placeholder": "https://rss.hrtime.asia:4000"}},
             {"type": "textarea", "key": "rsshub_movie_paths", "props": {"label": "电影路径(一行一个)", "rows": 6}},
             {"type": "textarea", "key": "rsshub_tv_paths", "props": {"label": "剧集路径(一行一个)", "rows": 6}},
+            {"type": "subheader", "text": "NullBR (可选)"},
+            {"type": "switch", "key": "enable_nullbr", "props": {"label": "启用 NullBR 聚合"}},
+            {"type": "text", "key": "nullbr_base", "props": {"label": "NullBR 基址", "placeholder": "https://example.com"}},
             {"type": "text", "key": "http_proxy", "props": {"label": "HTTP 代理(可选)", "placeholder": "http://host:port"}},
         ]
         defaults = {
@@ -72,7 +81,6 @@ class AutoFollow115(_PluginBase):
             "quality_prefs": ["2160p", "HEVC", "HDR"],
             "enable_rsshub": True,
             "rsshub_base": "https://rss.hrtime.asia:4000",
-            # 常用电影榜单（示例，来自自建RSSHub）
             "rsshub_movie_paths": "\n".join([
                 "/douban/movie/weekly/movie_real_time_hotest",
                 "/douban/movie/weekly/movie_showing",
@@ -80,7 +88,6 @@ class AutoFollow115(_PluginBase):
                 "/douban/movie/weekly/movie_high_score",
                 "/douban/movie/weekly/movie_trending",
             ]),
-            # 常用剧集榜单（示例，来自自建RSSHub）
             "rsshub_tv_paths": "\n".join([
                 "/douban/tv/weekly/tv_real_time_hotest",
                 "/douban/tv/weekly/tv_showing",
@@ -88,6 +95,8 @@ class AutoFollow115(_PluginBase):
                 "/douban/tv/weekly/tv_high_score",
                 "/douban/tv/weekly/tv_trending",
             ]),
+            "enable_nullbr": False,
+            "nullbr_base": "",
             "http_proxy": None
         }
         return form, defaults
