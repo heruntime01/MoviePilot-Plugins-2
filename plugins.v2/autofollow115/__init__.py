@@ -11,10 +11,12 @@ from .providers.pansou import PanSouProvider
 from .providers.aipan import AiPanProvider
 from .providers.nullbr import NullBRProvider
 
+import datetime
+
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.2.3"
+    plugin_version = "0.2.4"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -48,7 +50,7 @@ class AutoFollow115(_PluginBase):
             {"path": "/discover", "endpoint": self.api_discover, "methods": ["GET"], "auth": "apikey",
              "summary": "获取热门列表(豆瓣m站+RSSHub)", "description": "type=tv|movie"},
             {"path": "/subscribe", "endpoint": self.api_subscribe, "methods": ["POST"], "auth": "apikey",
-             "summary": "新增订阅", "description": "提交订阅模型"},
+             "summary": "新增订阅", "description": "字段: type/title/year，可选 include/exclude/max_daily"},
             {"path": "/list", "endpoint": self.api_list, "methods": ["GET"], "auth": "apikey",
              "summary": "订阅清单", "description": ""},
             {"path": "/run", "endpoint": self.api_run, "methods": ["POST"], "auth": "apikey",
@@ -63,6 +65,7 @@ class AutoFollow115(_PluginBase):
             {"type": "switch", "key": "prefer_pack", "props": {"label": "优先整季/全集包"}},
             {"type": "chips", "key": "quality_prefs", "props": {"label": "质量偏好", "multiple": True},
              "items": [{"text":"2160p"},{"text":"1080p"},{"text":"HEVC"},{"text":"HDR"},{"text":"WEB-DL"}]},
+            {"type": "switch", "key": "validate_115", "props": {"label": "推送前校验 115 链接可达(HEAD)", "inset": True}},
             {"type": "subheader", "text": "RSSHub (豆瓣榜单)"},
             {"type": "switch", "key": "enable_rsshub", "props": {"label": "启用 RSSHub 榜单聚合"}},
             {"type": "text", "key": "rsshub_base", "props": {"label": "RSSHub 基址", "placeholder": "https://rss.hrtime.asia:4000"}},
@@ -78,6 +81,7 @@ class AutoFollow115(_PluginBase):
             "cron_scan": "*/30 * * * *",
             "prefer_pack": True,
             "quality_prefs": ["2160p", "HEVC", "HDR"],
+            "validate_115": False,
             "enable_rsshub": True,
             "rsshub_base": "https://rss.hrtime.asia:4000",
             "rsshub_movie_paths": "\n".join([
@@ -164,11 +168,42 @@ class AutoFollow115(_PluginBase):
         text = f"{title}\n{url}"
         self.post_message(mtype=NotificationType.Text, title="[115自动追剧] 命中", text=text)
 
+    def _check_url_head(self, url: str, timeout: int=3) -> bool:
+        try:
+            import urllib.request as ur
+            req = ur.Request(url, method='HEAD', headers={'User-Agent':'Mozilla/5.0'})
+            opener = ur.build_opener()
+            with opener.open(req, timeout=timeout) as resp:
+                return 200 <= getattr(resp, 'status', resp.getcode()) < 400
+        except Exception:
+            return False
+
+    def _match_filters(self, title: str, include: Optional[List[str]|str], exclude: Optional[List[str]|str]) -> bool:
+        t = (title or '').lower()
+        def _list(x):
+            if x is None:
+                return []
+            if isinstance(x, list):
+                return [str(i).strip().lower() for i in x if str(i).strip()]
+            # string: split by comma/space
+            parts = [p.strip() for p in str(x).replace('，', ',').split(',')]
+            return [p.lower() for p in parts if p]
+        inc = _list(include)
+        exc = _list(exclude)
+        if inc and not any(k in t for k in inc):
+            return False
+        if exc and any(k in t for k in exc):
+            return False
+        return True
+
     def job_scan(self, **kwargs):
         subs = self.get_data("subs") or []
         if not subs:
             return
         pushed_map: Dict[str, List[str]] = self.get_data('pushed') or {}
+        push_count: Dict[str, Dict[str,int]] = self.get_data('push_count') or {}
+        today = datetime.date.today().isoformat()
+        validate = bool(self._conf.get('validate_115', False))
         for sub in subs:
             q = sub.get('title')
             if not q:
@@ -191,20 +226,41 @@ class AutoFollow115(_PluginBase):
                     continue
                 seen.add(u); uniq.append(r)
             pushed = set(pushed_map.get(q, []) or [])
+            # daily limit per sub (default 3 if provided in sub)
+            sub_limit = 3
+            try:
+                sub_limit = int(sub.get('max_daily', 3))
+            except Exception:
+                sub_limit = 3
+            sub_count_map = push_count.get(q, {})
+            today_count = int(sub_count_map.get(today, 0))
+            if today_count >= sub_limit:
+                continue
+            include = sub.get('include')
+            exclude = sub.get('exclude')
             pushed_this_round: List[str] = []
             for r in uniq:
                 u = r.get('url')
                 if not u or u in pushed:
                     continue
-                if not good_enough(r.get('title') or q, sub.get('year'), prefer_pack=bool(self._conf.get('prefer_pack', True))):
+                title = r.get('title') or q
+                if not self._match_filters(title, include, exclude):
+                    continue
+                if not good_enough(title, sub.get('year'), prefer_pack=bool(self._conf.get('prefer_pack', True))):
+                    continue
+                if validate and not self._check_url_head(u):
                     continue
                 self._push_115(q, u)
                 pushed_this_round.append(u)
+                today_count += 1
                 break
             if pushed_this_round:
                 new_list = list(pushed.union(pushed_this_round))
                 pushed_map[q] = new_list
+                sub_count_map[today] = today_count
+                push_count[q] = sub_count_map
         self.save_data('pushed', pushed_map)
+        self.save_data('push_count', push_count)
 
     def api_discover(self, request=None):
         t = (request.query_params.get("type") if request else None) or "tv"
