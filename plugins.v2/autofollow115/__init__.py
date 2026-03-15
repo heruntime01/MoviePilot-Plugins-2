@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from apscheduler.triggers.cron import CronTrigger
 from app.plugins import _PluginBase
 from app.schemas import NotificationType
+from app.log import logger
 
 from .douban import hot as douban_hot
 from .rsshub import fetch_rsshub
@@ -18,7 +19,7 @@ import datetime
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.3.4"
+    plugin_version = "0.3.5"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -75,72 +76,85 @@ class AutoFollow115(_PluginBase):
              "summary": "手动触发扫描", "description": ""},
         ]
 
-    def get_form(self) -> Tuple[Optional[List[dict]], Dict[str, Any]]:
-        form = [
-            {"type": "switch", "key": "enabled", "props": {"label": "启用插件"}},
-            {"type": "subheader", "text": "策略"},
-            {"type": "text", "key": "cron_scan", "props": {"label": "扫描 Cron", "placeholder": "*/30 * * * *"}},
-            {"type": "switch", "key": "prefer_pack", "props": {"label": "优先整季/全集包"}},
-            {"type": "chips", "key": "quality_prefs", "props": {"label": "质量偏好", "multiple": True},
-             "items": [{"text":"2160p"},{"text":"1080p"},{"text":"HEVC"},{"text":"HDR"},{"text":"WEB-DL"}]},
-            {"type": "switch", "key": "validate_115", "props": {"label": "推送前校验 115 链接可达(HEAD)", "inset": True}},
-            {"type": "subheader", "text": "RSSHub (豆瓣榜单)"},
-            {"type": "switch", "key": "enable_rsshub", "props": {"label": "启用 RSSHub 榜单聚合"}},
-            {"type": "text", "key": "rsshub_base", "props": {"label": "RSSHub 基址", "placeholder": "https://rss.hrtime.asia:4000"}},
-            {"type": "textarea", "key": "rsshub_movie_paths", "props": {"label": "电影路径(一行一个)", "rows": 6}},
-            {"type": "textarea", "key": "rsshub_tv_paths", "props": {"label": "剧集路径(一行一个)", "rows": 6}},
-            {"type": "subheader", "text": "NullBR (可选)"},
-            {"type": "switch", "key": "enable_nullbr", "props": {"label": "启用 NullBR 聚合"}},
-            {"type": "text", "key": "nullbr_base", "props": {"label": "NullBR 基址", "placeholder": "https://example.com"}},
-            {"type": "text", "key": "http_proxy", "props": {"label": "HTTP 代理(可选)", "placeholder": "http://host:port"}},
+    def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
+        page = [
+            {
+                'component': 'VForm',
+                'content': [
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {'component':'VCol','props':{'cols':12,'md':4},'content':[{'component':'VSwitch','props':{'model':'enabled','label':'启用插件'}}]},
+                            {'component':'VCol','props':{'cols':12,'md':4},'content':[{'component':'VCronField','props':{'model':'cron_scan','label':'扫描 Cron'}}]},
+                            {'component':'VCol','props':{'cols':12,'md':4},'content':[{'component':'VSwitch','props':{'model':'prefer_pack','label':'优先整季/全集包'}}]},
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VSelect','props':{'model':'quality_prefs','label':'质量偏好','items':['2160p','1080p','HEVC','HDR','WEB-DL'],'multiple':True,'chips':True}}]},
+                            {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VSwitch','props':{'model':'validate_115','label':'推送前校验 115 链接(HEAD)'}}]},
+                        ]
+                    },
+                    {'component':'VDivider'},
+                    {'component':'VSubheader','props':{'text':'RSSHub (豆瓣榜单)'}},
+                    {
+                        'component':'VRow','content':[
+                            {'component':'VCol','props':{'cols':12,'md':3},'content':[{'component':'VSwitch','props':{'model':'enable_rsshub','label':'启用 RSSHub'}}]},
+                            {'component':'VCol','props':{'cols':12,'md':9},'content':[{'component':'VTextField','props':{'model':'rsshub_base','label':'RSSHub 基址'}}]},
+                        ]
+                    },
+                    {
+                        'component':'VRow','content':[
+                            {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VTextarea','props':{'model':'rsshub_movie_paths','label':'电影路径(一行一个)','rows':6}}]},
+                            {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VTextarea','props':{'model':'rsshub_tv_paths','label':'剧集路径(一行一个)','rows':6}}]},
+                        ]
+                    },
+                    {'component':'VDivider'},
+                    {'component':'VSubheader','props':{'text':'NullBR (可选)'}},
+                    {
+                        'component':'VRow','content':[
+                            {'component':'VCol','props':{'cols':12,'md':3},'content':[{'component':'VSwitch','props':{'model':'enable_nullbr','label':'启用 NullBR'}}]},
+                            {'component':'VCol','props':{'cols':12,'md':9},'content':[{'component':'VTextField','props':{'model':'nullbr_base','label':'NullBR 基址'}}]},
+                        ]
+                    },
+                    {
+                        'component':'VRow','content':[
+                            {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VTextField','props':{'model':'http_proxy','label':'HTTP 代理'}}]},
+                        ]
+                    },
+                ]
+            }
         ]
         defaults = {
-            "enabled": True,
-            "cron_scan": "*/30 * * * *",
-            "prefer_pack": True,
-            "quality_prefs": ["2160p", "HEVC", "HDR"],
-            "validate_115": False,
-            "enable_rsshub": True,
-            "rsshub_base": "https://rss.hrtime.asia:4000",
-            "rsshub_movie_paths": "\n".join([
-                "/douban/movie/weekly/movie_real_time_hotest",
-                "/douban/movie/weekly/movie_showing",
-                "/douban/movie/weekly/movie_most_watched",
-                "/douban/movie/weekly/movie_high_score",
-                "/douban/movie/weekly/movie_trending",
+            'enabled': True,
+            'cron_scan': '*/30 * * * *',
+            'prefer_pack': True,
+            'quality_prefs': ['2160p','HEVC','HDR'],
+            'validate_115': False,
+            'enable_rsshub': True,
+            'rsshub_base': 'https://rss.hrtime.asia:4000',
+            'rsshub_movie_paths': '
+'.join([
+                '/douban/movie/weekly/movie_real_time_hotest',
+                '/douban/movie/weekly/movie_showing',
+                '/douban/movie/weekly/movie_most_watched',
+                '/douban/movie/weekly/movie_high_score',
+                '/douban/movie/weekly/movie_trending',
             ]),
-            "rsshub_tv_paths": "\n".join([
-                "/douban/tv/weekly/tv_real_time_hotest",
-                "/douban/tv/weekly/tv_showing",
-                "/douban/tv/weekly/tv_most_watched",
-                "/douban/tv/weekly/tv_high_score",
-                "/douban/tv/weekly/tv_trending",
+            'rsshub_tv_paths': '
+'.join([
+                '/douban/tv/weekly/tv_real_time_hotest',
+                '/douban/tv/weekly/tv_showing',
+                '/douban/tv/weekly/tv_most_watched',
+                '/douban/tv/weekly/tv_high_score',
+                '/douban/tv/weekly/tv_trending',
             ]),
-            "enable_nullbr": False,
-            "nullbr_base": "",
-            "http_proxy": None
+            'enable_nullbr': False,
+            'nullbr_base': '',
+            'http_proxy': None,
         }
-        return form, defaults
-
-    def _table_items(self) -> List[Dict[str, Any]]:
-        subs = self.get_data("subs") or []
-        prog = self.get_data('progress') or {}
-        items = []
-        for s in subs:
-            key = s.get('title')
-            p = prog.get(key) or {}
-            eps = sorted((p.get('episodes') or []))
-            items.append({
-                'title': key,
-                'type': s.get('type'),
-                'year': s.get('year'),
-                'episodes_count': len(eps),
-                'last_episode': (eps[-1] if eps else None),
-                'pack': '是' if (p.get('pack') or False) else '否',
-                'total_episodes': p.get('total'),
-                'last_update': p.get('last_update'),
-            })
-        return items
+        return page, defaults
 
     def get_page(self) -> Optional[List[dict]]:
         headers = [
@@ -194,9 +208,9 @@ class AutoFollow115(_PluginBase):
     def _log(self, level: str, msg: str):
         try:
             if level.lower() == "error":
-                getattr(self, "error", print)(msg)
+                logger.error(msg)
             else:
-                getattr(self, "info", print)(msg)
+                logger.info(msg)
         except Exception:
             pass
         self._add_log(level.upper(), msg)
