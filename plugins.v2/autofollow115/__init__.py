@@ -15,7 +15,7 @@ plugin_name = 'AutoFollow115'
 plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
 plugin_icon = 'autofollow115.png'
 plugin_color = '#5E81AC'
-plugin_version = '0.5.4'
+plugin_version = '0.5.5'
 plugin_author = 'heruntime01'
 author_url = 'https://github.com/heruntime01'
 plugin_config_prefix = 'autofollow115_'
@@ -274,8 +274,7 @@ class AutoFollow115(Plugin):
             if not links:
                 continue
             link = links[0]
-            msg = "[115自动追剧] 命中：" + str(s.get("title")) + "
-" + str(link)
+            msg = "[115自动追剧] 命中：" + str(s.get("title")) + chr(10) + str(link)
             self.post_message('Text', msg)
             prog = self.get_data('progress') or {}
             sid = s.get('id')
