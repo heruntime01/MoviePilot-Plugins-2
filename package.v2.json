@@ -233,8 +233,8 @@
   },
   "AutoFollow115": {
     "history": {
-      "v0.2.1": "预置更多 Douban RSSHub 榜单路径（电影/剧集）"
+      "v0.2.2": "新增 NullBR provider（可配置 base，默认关闭）"
     },
-    "version": "0.2.1"
+    "version": "0.2.2"
   }
 }
