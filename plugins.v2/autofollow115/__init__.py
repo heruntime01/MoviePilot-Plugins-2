@@ -16,12 +16,11 @@ REGION_OPTS=['大陆','欧美','日韩']
 GENRE_OPTS=['剧情','喜剧','悬疑','动作','爱情','科幻','犯罪','动画','纪录片','战争','古装','武侠','奇幻','家庭','恐怖','历史','音乐']
 
 class AutoFollow115(_PluginBase):
-    # 元数据
     plugin_name = 'AutoFollow115'
     plugin_desc = '自动追剧/电影到 115：发现→筛选→订阅→搜索→推送→进度（独立于系统订阅）'
     plugin_icon = 'autofollow115.png'
     plugin_color = '#5E81AC'
-    plugin_version = '0.6.3'
+    plugin_version = '0.6.4'
     plugin_author = 'heruntime01'
     author_url = 'https://github.com/heruntime01'
     plugin_config_prefix = 'autofollow115_'
@@ -35,11 +34,9 @@ class AutoFollow115(_PluginBase):
         cfg = config or {}
         self._enabled = bool(cfg.get('enabled', True))
         self._logs = self.get_data('logs') or []
-        # 数据键
         self.save_data('subs', self.get_data('subs') or [])
         self.save_data('progress', self.get_data('progress') or {})
         self.save_data('candidates', self.get_data('candidates') or [])
-        # 手动订阅（保存即生效）
         sub_title = (cfg.get('subscribe_title') or '').strip()
         sub_type = (cfg.get('subscribe_type') or 'tv')
         sub_year = (cfg.get('subscribe_year') or '').strip()
@@ -49,7 +46,6 @@ class AutoFollow115(_PluginBase):
                 self.update_config({'subscribe_title': '', 'subscribe_year': ''})
             except Exception:
                 pass
-        # 初始化候选（每日）
         try:
             self._refresh_candidates()
         except Exception as e:
@@ -59,133 +55,55 @@ class AutoFollow115(_PluginBase):
     def get_state(self) -> bool:
         return self._enabled
 
-    # 配置表单
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
         form = [
-            {
-                'component': 'VForm',
-                'content': [
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                                {'component': 'VSwitch', 'props': {'model': 'enabled', 'label': '启用插件'}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                                {'component': 'VCronField', 'props': {'model': 'cron_scan', 'label': '扫描 Cron'}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                                {'component': 'VCronField', 'props': {'model': 'cron_discover', 'label': '候选刷新 Cron'}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                                {'component': 'VSwitch', 'props': {'model': 'prefer_pack', 'label': '优先整季/全集包'}}
-                            ]},
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                                {'component': 'VSelect', 'props': {
-                                    'model': 'quality_prefs', 'label': '质量偏好',
-                                    'items': ['2160p','1080p','HEVC','HDR','WEB-DL'], 'multiple': True, 'chips': True
-                                }}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                                {'component': 'VSwitch', 'props': {'model': 'validate_115', 'label': '推送前校验 115 链接(HEAD)'}}
-                            ]}
-                        ]
-                    },
-                    {'component': 'VDivider'},
-                    {'component': 'VSubheader', 'props': {'text': 'RSSHub 来源与筛选'}},
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                                {'component': 'VSwitch', 'props': {'model': 'enable_rsshub', 'label': '启用 RSSHub'}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
-                                {'component': 'VTextField', 'props': {'model': 'rsshub_base', 'label': 'RSSHub 基址'}}
-                            ]}
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                                {'component': 'VTextarea', 'props': {'model': 'rsshub_movie_paths', 'label': '电影路径(一行一个)', 'rows': 6}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                                {'component': 'VTextarea', 'props': {'model': 'rsshub_tv_paths', 'label': '剧集路径(一行一个)', 'rows': 6}}
-                            ]}
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                                {'component': 'VSelect', 'props': {'model': 'filter_regions', 'label': '地区筛选', 'items': REGION_OPTS, 'multiple': True, 'chips': True}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                                {'component': 'VSelect', 'props': {'model': 'filter_genres', 'label': '类型筛选', 'items': GENRE_OPTS, 'multiple': True, 'chips': True}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                                {'component': 'VTextField', 'props': {'model': 'max_candidates', 'label': '候选数量(15~20 推荐)'}}
-                            ]}
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                                {'component': 'VTextarea', 'props': {'model': 'include_keywords', 'label': '包含关键词(一行一个)', 'rows': 4}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                                {'component': 'VTextarea', 'props': {'model': 'exclude_keywords', 'label': '排除关键词(一行一个)', 'rows': 4}}
-                            ]}
-                        ]
-                    },
-                    {'component': 'VDivider'},
-                    {'component': 'VSubheader', 'props': {'text': '可选：搜索源与代理'}},
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                                {'component': 'VSwitch', 'props': {'model': 'enable_pansou', 'label': '启用 PanSou'}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                                {'component': 'VSwitch', 'props': {'model': 'enable_aipan', 'label': '启用 AiPan'}}
-                            ]}
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                                {'component': 'VTextField', 'props': {'model': 'http_proxy', 'label': 'HTTP 代理 (http://host:port)'}}
-                            ]}
-                        ]
-                    },
-                    {'component': 'VDivider'},
-                    {'component': 'VSubheader', 'props': {'text': '手动订阅（保存设置后立即添加）'}},
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                                {'component': 'VTextField', 'props': {'model': 'subscribe_title', 'label': '标题'}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
-                                {'component': 'VSelect', 'props': {'model': 'subscribe_type', 'label': '类型', 'items': [
-                                    {'title':'电视剧','value':'tv'}, {'title':'电影','value':'movie'}
-                                ]}}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
-                                {'component': 'VTextField', 'props': {'model': 'subscribe_year', 'label': '年份(可选)'}}
-                            ]}
-                        ]
-                    }
-                ]
-            }
+            {'component': 'VForm','content': [
+                {'component': 'VRow','content': [
+                    {'component': 'VCol','props': {'cols':12,'md':3},'content':[{'component':'VSwitch','props':{'model':'enabled','label':'启用插件'}}]},
+                    {'component': 'VCol','props': {'cols':12,'md':3},'content':[{'component':'VCronField','props':{'model':'cron_scan','label':'扫描 Cron'}}]},
+                    {'component': 'VCol','props': {'cols':12,'md':3},'content':[{'component':'VCronField','props':{'model':'cron_discover','label':'候选刷新 Cron'}}]},
+                    {'component': 'VCol','props': {'cols':12,'md':3},'content':[{'component':'VSwitch','props':{'model':'prefer_pack','label':'优先整季/全集包'}}]},
+                ]},
+                {'component': 'VRow','content': [
+                    {'component': 'VCol','props': {'cols':12,'md':6},'content':[{'component':'VSelect','props':{'model':'quality_prefs','label':'质量偏好','items':['2160p','1080p','HEVC','HDR','WEB-DL'],'multiple':True,'chips':True}}]},
+                    {'component': 'VCol','props': {'cols':12,'md':6},'content':[{'component':'VSwitch','props':{'model':'validate_115','label':'推送前校验 115 链接(HEAD)'}}]},
+                ]},
+                {'component':'VDivider'},
+                {'component':'VSubheader','props':{'text':'RSSHub 来源与筛选'}},
+                {'component':'VRow','content':[
+                    {'component':'VCol','props':{'cols':12,'md':4},'content':[{'component':'VSwitch','props':{'model':'enable_rsshub','label':'启用 RSSHub'}}]},
+                    {'component':'VCol','props':{'cols':12,'md':8},'content':[{'component':'VTextField','props':{'model':'rsshub_base','label':'RSSHub 基址'}}]},
+                ]},
+                {'component':'VRow','content':[
+                    {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VTextarea','props':{'model':'rsshub_movie_paths','label':'电影路径(一行一个)','rows':6}}]},
+                    {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VTextarea','props':{'model':'rsshub_tv_paths','label':'剧集路径(一行一个)','rows':6}}]},
+                ]},
+                {'component':'VRow','content':[
+                    {'component':'VCol','props':{'cols':12,'md':4},'content':[{'component':'VSelect','props':{'model':'filter_regions','label':'地区筛选','items':REGION_OPTS,'multiple':True,'chips':True}}]},
+                    {'component':'VCol','props':{'cols':12,'md':4},'content':[{'component':'VSelect','props':{'model':'filter_genres','label':'类型筛选','items':GENRE_OPTS,'multiple':True,'chips':True}}]},
+                    {'component':'VCol','props':{'cols':12,'md':4},'content':[{'component':'VTextField','props':{'model':'max_candidates','label':'候选数量(15~20 推荐)'}}]},
+                ]},
+                {'component':'VRow','content':[
+                    {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VTextarea','props':{'model':'include_keywords','label':'包含关键词(一行一个)','rows':4}}]},
+                    {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VTextarea','props':{'model':'exclude_keywords','label':'排除关键词(一行一个)','rows':4}}]},
+                ]},
+                {'component':'VDivider'},
+                {'component':'VSubheader','props':{'text':'可选：搜索源与代理'}},
+                {'component':'VRow','content':[
+                    {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VSwitch','props':{'model':'enable_pansou','label':'启用 PanSou'}}]},
+                    {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VSwitch','props':{'model':'enable_aipan','label':'启用 AiPan'}}]},
+                ]},
+                {'component':'VRow','content':[
+                    {'component':'VCol','props':{'cols':12},'content':[{'component':'VTextField','props':{'model':'http_proxy','label':'HTTP 代理 (http://host:port)'}}]},
+                ]},
+                {'component':'VDivider'},
+                {'component':'VSubheader','props':{'text':'手动订阅（保存设置后立即添加）'}},
+                {'component':'VRow','content':[
+                    {'component':'VCol','props':{'cols':12,'md':6},'content':[{'component':'VTextField','props':{'model':'subscribe_title','label':'标题'}}]},
+                    {'component':'VCol','props':{'cols':6,'md':3},'content':[{'component':'VSelect','props':{'model':'subscribe_type','label':'类型','items':[{'title':'电视剧','value':'tv'},{'title':'电影','value':'movie'}]}}]},
+                    {'component':'VCol','props':{'cols':6,'md':3},'content':[{'component':'VTextField','props':{'model':'subscribe_year','label':'年份(可选)'}}]},
+                ]},
+            ]}
         ]
         defaults = {
             'enabled': True,
@@ -224,83 +142,48 @@ class AutoFollow115(_PluginBase):
         }
         return form, defaults
 
-    # 页面：候选海报卡 + 订阅表格
     def get_page(self) -> List[dict]:
         items = self.get_data('candidates') or []
-        # 卡片
         cards = []
         for it in items[:20]:
             title = it.get('title'); poster = it.get('poster'); mtype = it.get('type'); year = it.get('year'); douban = it.get('douban'); region = it.get('region'); genres = it.get('genres') or []
-            cards.append({
-                'component': 'VCard',
-                'props': {'class': 'w-56'},
-                'content': [
-                    {'component': 'VImg', 'props': {'src': poster, 'height': 180, 'cover': True}},
-                    {'component': 'VCardTitle', 'props': {'class': 'text-truncate', 'title': title}, 'text': title},
-                    {'component': 'VCardText', 'text': (region or '') + ' ' + ('/'.join(genres) if genres else '')},
-                    {'component': 'VCardActions', 'content': [
-                        {'component': 'VBtn', 'props': {'size': 'small', 'color': 'primary'}, 'text': '订阅', 'events': {
-                            'click': {
-                                'api': 'plugin/AutoFollow115/subscribe',
-                                'method': 'post',
-                                'params': {'title': title, 'type': mtype, 'year': year, 'apikey': settings.API_TOKEN}
-                            }
-                        }},
-                        {'component': 'VBtn', 'props': {'size': 'small', 'variant': 'text'}, 'text': '豆瓣', 'events': {
-                            'click': {'api': 'open', 'method': 'get', 'params': {'url': 'https://movie.douban.com/subject/' + str(douban)}}
-                        }}
-                    ]}
-                ]
-            })
-        grid = {
-            'component': 'div',
-            'props': {'class': 'grid gap-3 grid-info-card'},
-            'content': cards
-        }
-        # 订阅表
+            cards.append({'component':'VCard','props':{'class':'w-56'},'content':[
+                {'component':'VImg','props':{'src': poster, 'height':180, 'cover':True}},
+                {'component':'VCardTitle','props':{'class':'text-truncate','title':title},'text':title},
+                {'component':'VCardText','text': (region or '') + ' ' + ('/'.join(genres) if genres else '')},
+                {'component':'VCardActions','content':[
+                    {'component':'VBtn','props':{'size':'small','color':'primary'},'text':'订阅','events':{'click':{'api':'plugin/AutoFollow115/subscribe','method':'post','params':{'title':title,'type':mtype,'year':year,'apikey': settings.API_TOKEN}}}},
+                    {'component':'VBtn','props':{'size':'small','variant':'text'},'text':'豆瓣','events':{'click':{'api':'open','method':'get','params':{'url':'https://movie.douban.com/subject/'+str(douban)}}}},
+                ]}
+            ]})
+        grid={'component':'div','props':{'class':'grid gap-3 grid-info-card'},'content':cards}
         subs = self.get_data('subs') or []
         prog = self.get_data('progress') or {}
-        headers = [
-            {'title': '标题', 'key': 'title', 'sortable': True},
-            {'title': '类型', 'key': 'type'},
-            {'title': '年份', 'key': 'year'},
-            {'title': '已推送', 'key': 'pushed_count'},
-            {'title': '最后更新', 'key': 'last_update'}
-        ]
-        rows = []
+        headers=[{'title':'标题','key':'title','sortable':True},{'title':'类型','key':'type'},{'title':'年份','key':'year'},{'title':'已推送','key':'pushed_count'},{'title':'最后更新','key':'last_update'}]
+        rows=[]
         for s in subs:
             sid = s.get('id') or s.get('title')
             pr = prog.get(sid, {})
-            rows.append({
-                'title': s.get('title'),
-                'type': s.get('type'),
-                'year': s.get('year'),
-                'pushed_count': len(pr.get('pushed') or []),
-                'last_update': pr.get('last_update')
-            })
-        table = {'component': 'VDataTableVirtual', 'props': {
-            'headers': headers, 'items': rows, 'height': '26rem', 'density': 'compact', 'fixed-header': True, 'items-per-page': 20
-        }}
+            rows.append({'title': s.get('title'), 'type': s.get('type'), 'year': s.get('year'), 'pushed_count': len(pr.get('pushed') or []), 'last_update': pr.get('last_update')})
+        table={'component':'VDataTableVirtual','props':{'headers':headers,'items':rows,'height':'26rem','density':'compact','fixed-header':True,'items-per-page':20}}
         return [
-            {'component': 'VCard', 'props': {'title': '今日候选（按筛选）'}, 'content': [grid]},
-            {'component': 'VCard', 'props': {'title': '我的订阅与进度'}, 'content': [table]},
+            {'component':'VCard','props':{'title':'今日候选（按筛选）'},'content':[grid]},
+            {'component':'VCard','props':{'title':'我的订阅与进度'},'content':[table]},
         ]
 
-    # API
     def get_api(self) -> List[Dict[str, Any]]:
         return [
-            {'path': '/discover', 'methods': ['GET'], 'endpoint': self.api_discover, 'summary': '发现候选（返回并刷新）'},
-            {'path': '/subscribe', 'methods': ['POST'], 'endpoint': self.api_subscribe, 'summary': '订阅'},
-            {'path': '/unsubscribe', 'methods': ['POST'], 'endpoint': self.api_unsubscribe, 'summary': '退订'},
-            {'path': '/reset_progress', 'methods': ['POST'], 'endpoint': self.api_reset_progress, 'summary': '重置进度'},
-            {'path': '/list', 'methods': ['GET'], 'endpoint': self.api_list, 'summary': '订阅列表'},
-            {'path': '/progress', 'methods': ['GET'], 'endpoint': self.api_progress, 'summary': '进度'},
-            {'path': '/run', 'methods': ['POST'], 'endpoint': self.api_run, 'summary': '立即扫描'},
-            {'path': '/logs', 'methods': ['GET'], 'endpoint': self.api_logs, 'summary': '日志'},
-            {'path': '/logs/clear', 'methods': ['POST'], 'endpoint': self.api_logs_clear, 'summary': '清空日志'},
+            {'path':'/discover','methods':['GET'],'endpoint': self.api_discover, 'summary':'发现候选（返回并刷新）'},
+            {'path':'/subscribe','methods':['POST'],'endpoint': self.api_subscribe, 'summary':'订阅'},
+            {'path':'/unsubscribe','methods':['POST'],'endpoint': self.api_unsubscribe, 'summary':'退订'},
+            {'path':'/reset_progress','methods':['POST'],'endpoint': self.api_reset_progress, 'summary':'重置进度'},
+            {'path':'/list','methods':['GET'],'endpoint': self.api_list, 'summary':'订阅列表'},
+            {'path':'/progress','methods':['GET'],'endpoint': self.api_progress, 'summary':'进度'},
+            {'path':'/run','methods':['POST'],'endpoint': self.api_run, 'summary':'立即扫描'},
+            {'path':'/logs','methods':['GET'],'endpoint': self.api_logs, 'summary':'日志'},
+            {'path':'/logs/clear','methods':['POST'],'endpoint': self.api_logs_clear, 'summary':'清空日志'},
         ]
 
-    # 服务（扫描 + 候选刷新）
     def get_service(self) -> List[dict]:
         if not self._enabled:
             return []
@@ -323,7 +206,6 @@ class AutoFollow115(_PluginBase):
     def stop_service(self):
         pass
 
-    # ===== API 实现 =====
     def api_discover(self, **kwargs):
         try:
             cnt = self._refresh_candidates()
@@ -388,7 +270,6 @@ class AutoFollow115(_PluginBase):
         self.save_data('logs', self._logs)
         return self.success(msg='cleared')
 
-    # ===== 服务作业 =====
     def job_scan(self):
         if not self._enabled:
             return
@@ -436,7 +317,6 @@ class AutoFollow115(_PluginBase):
         except Exception as e:
             self._log_step('discover', 'refresh scheduled failed', {'error': str(e)})
 
-    # ===== 发现与筛选 =====
     def _refresh_candidates(self) -> int:
         raw = list(self._discover_from_rsshub())
         cfg = self.get_config() or {}
@@ -482,7 +362,6 @@ class AutoFollow115(_PluginBase):
             url = base + (p if p.startswith('/') else '/' + p)
             try:
                 xml = self._http_get(url)
-                # split items
                 for item_xml in re.split(r'</item>', xml, flags=re.I):
                     title = self._xml_tag(item_xml, 'title')
                     link = self._xml_tag(item_xml, 'link')
@@ -501,7 +380,6 @@ class AutoFollow115(_PluginBase):
                 self._log_step('discover', 'rsshub fetch fail', {'path': p, 'error': str(e)})
         return []
 
-    # ===== 工具函数 =====
     def _http_get(self, url: str, timeout: int = 15) -> str:
         req = _req.Request(url, headers=UA)
         with _req.urlopen(req, timeout=timeout) as resp:
@@ -518,7 +396,7 @@ class AutoFollow115(_PluginBase):
     def _first_img(self, html: str) -> str:
         if not html:
             return ''
-        m = re.search(r'<img[^>]+src=["']([^"']+)["']', html, re.I)
+        m = re.search(r"<img[^>]+src=["']([^"']+)["']", html, re.I)
         return (m.group(1).strip() if m else '')
 
     def _first_douban_id(self, link: str) -> str:
@@ -536,7 +414,6 @@ class AutoFollow115(_PluginBase):
     def _extract_region(self, text: str) -> str:
         if not text:
             return ''
-        # Douban 描述常含“地区/制片国家/地区”
         m = re.search(r'(?:地区|制片国家/地区)[：: ]([^<
 ]+)', text)
         if m:
@@ -549,7 +426,6 @@ class AutoFollow115(_PluginBase):
             if any(x in val for x in ['日本','韩国']):
                 return '日韩'
             return '欧美'
-        # 兜底：按标题语言粗分
         return ''
 
     def _extract_genres(self, text: str) -> List[str]:
@@ -587,12 +463,7 @@ class AutoFollow115(_PluginBase):
         return True, sid
 
     def _log_step(self, phase: str, msg: str, ctx: Dict[str,Any]=None):
-        rec = {
-            'time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'phase': phase,
-            'msg': msg,
-            'ctx': (ctx or {})
-        }
+        rec = {'time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),'phase': phase,'msg': msg,'ctx': (ctx or {})}
         logs = self._logs or []
         logs.append(rec)
         self._logs = logs[-2000:]
