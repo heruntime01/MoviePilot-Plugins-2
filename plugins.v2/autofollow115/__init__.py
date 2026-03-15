@@ -17,7 +17,7 @@ plugin_name = 'AutoFollow115'
 plugin_desc = '自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存'
 plugin_icon = 'autofollow115.png'
 plugin_color = '#5E81AC'
-plugin_version = '0.5.7'
+plugin_version = '0.5.8'
 plugin_author = 'heruntime01'
 author_url = 'https://github.com/heruntime01'
 plugin_config_prefix = 'autofollow115_'
@@ -190,8 +190,6 @@ class AutoFollow115(_PluginBase):
         }]
 
     def stop_service(self):
-        pass
-(self):
         pass
 
     # ===== APIs =====
