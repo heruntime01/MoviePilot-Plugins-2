@@ -233,8 +233,8 @@
   },
   "AutoFollow115": {
     "history": {
-      "v0.2.2": "新增 NullBR provider（可配置 base，默认关闭）"
+      "v0.2.3": "评分增强(中字/季集/质量)，发现项标注来源(douban/rsshub)，日志增强，README"
     },
-    "version": "0.2.2"
+    "version": "0.2.3"
   }
 }
