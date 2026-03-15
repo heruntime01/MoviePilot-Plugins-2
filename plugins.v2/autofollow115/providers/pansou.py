@@ -11,5 +11,8 @@ class PanSouProvider(SearchProvider):
             html = self._get_html(url)
         except Exception:
             return []
+        items = self.extract_items_with_titles(html)
+        if items:
+            return [{"title": t or query, "url": u, "provider": self.name, "score": 0} for (u,t) in items]
         links = self.extract_115(html)
         return [{"title": query, "url": u, "provider": self.name, "score": 0} for u in links]
