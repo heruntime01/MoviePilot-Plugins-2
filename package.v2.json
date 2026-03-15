@@ -233,8 +233,8 @@
   },
   "AutoFollow115": {
     "history": {
-      "v0.2.3": "评分增强(中字/季集/质量)，发现项标注来源(douban/rsshub)，日志增强，README"
+      "v0.2.4": "订阅 include/exclude、每日上限、可选 115 链接校验"
     },
-    "version": "0.2.3"
+    "version": "0.2.4"
   }
 }
