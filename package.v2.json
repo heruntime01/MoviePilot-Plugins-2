@@ -237,11 +237,12 @@
     },
     "version": "0.3.2",
     "id": "autofollow115",
-    "name": "AutoFollow115",
+    "name": "115 自动追剧",
     "author": "Herun",
     "desc": "自动追剧/追片：豆瓣+RSSHub 发现，PanSou/AiPan/NullBR 搜索，命中后推送 115 链接到对话框自动转存",
     "icon": "icons/autofollow115.png",
     "homepage": "https://github.com/heruntime01/MoviePilot-Plugins-2/tree/main/plugins.v2/autofollow115",
-    "render": "vuetify"
+    "render": "vuetify",
+    "description": "自动追剧/追片：豆瓣+RSSHub 发现，PanSou/AiPan/NullBR 搜索，命中后推送 115 链接到对话框自动转存"
   }
 }
