@@ -1,91 +1,71 @@
 
-# AutoFollow115 (MoviePilot v2 Plugin)
+# AutoFollow115
 
-一个用于 MoviePilot v2 的自动追剧/追片插件：发现热门条目，聚合网盘搜索源，命中后将 115 分享链接推送到 MoviePilot 对话框，触发 115 自动转存。
+自动追剧/电影到 115：发现 → 订阅 → 搜索 → 推送 115 链接到对话框触发自动转存。
 
-## 功能概览
-- 发现源（可并行聚合）
-  - 豆瓣 m 站热门（电影/剧集）
-  - RSSHub 路由（可配置自建地址与路由；预置常用的电影/剧集周榜与热度榜）
-- 搜索源（聚合 + 去重 + 打分）
-  - PanSou、AiPan（默认启用）
-  - NullBR（可选，需站点允许匿名检索）
-- 打分/过滤
-  - 质量与整包偏好：2160p/1080p/HEVC/HDR/WEB-DL、整季/全集/Complete 优先
-  - 集数/季集识别：SxxExx、EPxx、中文“第xx集/话”等
-  - 字幕偏好加权：中字/中英/官中/熟肉/内嵌/内封等
-  - include/exclude 订阅级关键词过滤
-- 推送与限流
-  - 命中后以文本消息推送到 MoviePilot 对话框（标题 + 115 链接），由 MP 自动转存
-  - 同订阅同链接去重；每次扫描最多推送 1 条；支持每订阅每日上限 max_daily（默认 3）
-  - 可选 validate_115：推送前对 115 链接做 HEAD 校验（降低失效概率）
-- 进度统计（剧集）
-  - 命中时记录 episodes 列表、是否整包 pack、最近一次 last_update/last_url/last_provider
-  - 尝试从豆瓣条目页解析总集数 total_episodes（尽力而为，失败则为 null）
+## 功能
+- 发现：基于 RSSHub（豆瓣榜单）拉取热门电影/剧集标题
+- 订阅：按标题/类型（movie/tv）建立订阅项，持久化进度
+- 搜索：在 PanSou/AiPan 抓取 115 链接（支持 /s /f /l 短链，去重）
+- 推送：将命中 115 链接以文本推送到 MoviePilot 对话框，触发自动转存
+- 定时：默认每 30 分钟扫描一次（可配置 crontab）
+- 页面：
+  - 设置页：Vuetify JSON（v-form/v-row/v-col/v-switch/v-text-field/v-textarea/v-select）
+  - 详情页：订阅与进度 v-data-table
+- 日志：内置 ring buffer + /logs API
 
 ## 安装
-1) 在系统配置 SystemConfigKey.UserInstalledPlugins 中加入 `autofollow115`
-2) 重载/重启 MoviePilot 插件服务
-3) 插件路径：`plugins.v2/autofollow115/`
+- 插件仓库：MoviePilot-Plugins-2（v2）
+- 插件 ID：autofollow115
+- `package.v2.json` 中已包含元信息；商店支持查看/更新。
 
-## 配置（表单）
-- 启用插件 enabled（默认开）
-- 扫描 Cron（默认 `*/30 * * * *`）
-- 优先整季/全集包 prefer_pack（默认开）
-- 质量偏好 quality_prefs（2160p/1080p/HEVC/HDR/WEB-DL）
-- 推送前校验 115 链接 validate_115（默认关）
-- RSSHub：enable_rsshub、rsshub_base、rsshub_movie_paths、rsshub_tv_paths（多行文本，一行一个）
-- NullBR：enable_nullbr、nullbr_base（可选）
-- HTTP 代理 http_proxy（可选）
+## 配置
+- enabled：是否启用（默认 true）
+- cron_scan：扫描定时（默认 `*/30 * * * *`）
+- prefer_pack：优先整季/全集包（默认 true）
+- quality_prefs：质量偏好（默认 [2160p, HEVC, HDR]）
+- validate_115：推送前校验 115 链接（HEAD，默认 false）
+- enable_rsshub：启用 RSSHub（默认 true）
+- rsshub_base：RSSHub 基址（默认 `https://rss.hrtime.asia:4000`）
+- rsshub_movie_paths：电影路径（多行，一行一个）
+- rsshub_tv_paths：剧集路径（多行，一行一个）
+- enable_pansou：启用 PanSou 搜索（默认 true）
+- enable_aipan：启用 AiPan 搜索（默认 true）
+- http_proxy：HTTP 代理（形如 `http://host:port`，可选）
 
-## API（均会被框架自动加上前缀 /autofollow115）
-- GET /discover
-  - 参数：type=tv|movie（默认 tv）
-  - 返回：热门条目列表（包含 source 字段：douban/rsshub）
-- POST /subscribe
-  - 请求体：{type, title, year, include?, exclude?, max_daily?}
-  - 动作：新增订阅并持久化
-- POST /unsubscribe
-  - 请求体：{title}
-  - 动作：取消订阅
-- POST /reset_progress
-  - 请求体：{title}
-  - 动作：清空该订阅的进度记录
-- GET /list
-  - 返回：订阅汇总（title/type/year、episodes_count、last_episode、pack、total_episodes、last_update）
-- GET /progress
-  - 返回：订阅详情（episodes 列表、pack、total_episodes、last_url、last_provider、last_update）
-- POST /run
-  - 动作：立即触发一次扫描
+## API
+- GET /autofollow115/discover：返回发现的条目（来自 RSSHub）
+- POST /autofollow115/subscribe：{title, type, year?} → 订阅
+- POST /autofollow115/unsubscribe：{id} → 取消订阅
+- POST /autofollow115/reset_progress：{id} → 重置进度
+- GET /autofollow115/list：订阅列表
+- GET /autofollow115/progress：进度数据
+- POST /autofollow115/run：立即执行一次扫描
+- GET /autofollow115/logs：最近日志
+- POST /autofollow115/logs/clear：清空日志
 
-## 定时任务（服务）
-- 订阅扫描：默认 `*/30 * * * *`（可在配置中修改）
-- 热门刷新：`0 */6 * * *`（豆瓣 m 站 + RSSHub 合并并去重）
+## 服务（定时任务）
+- 名称：autofollow115_scan
+- Cron：默认 `*/30 * * * *`（配置项 `cron_scan`）
 
-## 工作原理（简述）
-1) Discover：合并豆瓣 m 站与 RSSHub 的热门条目，去重缓存
-2) Subscribe：按 title/type/year 建立订阅规则，可配置 include/exclude 与每日推送上限
-3) Scan：并行调用各 Provider 搜索 115 链接，抽取链接与标题，统一打分排序与去重
-4) Filter：按订阅 include/exclude/质量/整包等策略过滤
-5) Push：将 115 链接逐条推送到 MoviePilot 对话框，由 MP 自动转存；记入进度/去重
+## 使用说明
+1) 在设置页启用插件，确认 RSSHub 基址可访问
+2) 在“发现”接口或外部获取的标题基础上调用 /subscribe 建立订阅
+3) 等待定时扫描或执行 /run，命中的 115 链接会被推送到 MoviePilot 对话框并自动转存
+4) 在详情页查看订阅/进度，必要时 /unsubscribe 或 /reset_progress
 
-## 已知限制
-- 某些站点会触发反爬或限频；已内置重试/退避与代理支持，但并不保证 100% 命中
-- 集数/整包识别依赖页面文本，源站标题不规范时可能识别不完整
-- total_episodes 依赖豆瓣条目页解析，失败时返回 null
+## 日志
+- /logs 返回最近 500 条日志；日志也写入后端日志文件（带前缀 [autofollow115]）
 
-## 路线图（Roadmap）
-- 提升 Provider 选择器鲁棒性与备用入口
-- 更多 115 链接归一化与短链展开（限频、礼貌）
-- 更细粒度日志开关与调试面板
-- 前端页面展示订阅/进度表格与一键操作
+## 版本历史（摘）
+- v0.5.1：文档补齐（官方模板 README）
+- v0.5.0：重写为单文件；UI/设置/页面按 vuetify JSON；默认值常量化；清理目录；双命名资产
+- v0.4.0：UI 对齐 dailysummary 风格；设置页与详情页可见
+- v0.3.9：热修复字符串转义/引号导致的 SyntaxError
 
-## 版本记录（要点）
-- 0.3.1：总集数（豆瓣抓取，尽力而为）、取消订阅/重置进度 API、进度新增 last_url/last_provider
-- 0.3.0：进度统计与 API（/list、/progress），Provider 捕获标题用于集数识别
-- 0.2.4：订阅 include/exclude、每日推送上限 max_daily、validate_115（HEAD 校验）
-- 0.2.3：评分增强（字幕/季集/质量），发现项标注来源（douban/rsshub），日志增强
-- 0.2.x：集成 RSSHub 路由；NullBR 可选 Provider；整包与质量偏好；代理支持
-
-## 0.3.2 更新
-- 插件页新增表格：直接展示订阅与进度摘要（标题/类型/年份/已集数/最新集/整包/总集数/最近更新时间）。如需更丰富操作，将在后续版本加入交互按钮。
+## 发布流程（开发者）
+- 建议使用自动脚本（内部）创建 Release：
+  - 更新 __init__.py 版本、package.v2.json（version/history/release）
+  - 创建 Release（标签形如 AutoFollow115_vX.Y.Z）
+  - 上传双命名资产（autofollow115-X.Y.Z.zip、autofollow115_vX.Y.Z.zip）
+- 注：发布时可将 package.v2.json 的 release 设为 true 以在商店显示 NEW 高亮（建议保留一周）
