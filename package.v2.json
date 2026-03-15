@@ -252,9 +252,10 @@
       "v0.5.7": "兼容性：改用 _PluginBase 作为基类；get_service 返回 dict 列表（id/name/trigger/func）；post_message 使用 NotificationType；保留此前换行与导入修复",
       "v0.5.8": "修复：误生成的“(self): pass”残留导致语法错误；清除多余行，保持 _PluginBase + NotificationType + chr(10)；继续 NEW 高亮",
       "v0.5.9": "修复：补充类级元数据 plugin_version 等；get_api 使用 endpoint 而非 func；post_message 切回 NotificationType.Plugin；维持 _PluginBase 与 chr(10)；发布双资产/NEW",
-      "v0.6.0": "重构：对齐参考项目结构，拆分 ui/handlers/utils；_PluginBase 基类；get_api endpoint；V 组件 UI；稳定服务与消息；继续 chr(10) 与双资产；NEW 持续"
+      "v0.6.0": "重构：对齐参考项目结构，拆分 ui/handlers/utils；_PluginBase 基类；get_api endpoint；V 组件 UI；稳定服务与消息；继续 chr(10) 与双资产；NEW 持续",
+      "v0.6.1": "重构：回归单文件 __init__.py（参考 DoubanRank 风格）；移除 ui.py/handlers.py；表单与页面使用大写 V 组件与 content/props；接口 endpoint、服务 Cron/interval 回退；保留 chr(10) 与 NotificationType.Plugin；双资产/NEW"
     },
-    "version": "0.6.0",
+    "version": "0.6.1",
     "id": "autofollow115",
     "name": "115 自动追剧",
     "author": "Herun",
