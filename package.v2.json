@@ -232,14 +232,10 @@
     }
   },
   "AutoFollow115": {
-    "name": "115 自动追剧",
-    "description": "订阅豆瓣热门，聚合网盘搜索源（PanSou/AiPan/NullBR），命中即推送 115 链接到 MoviePilot 对话框自动转存",
-    "labels": "订阅,115,豆瓣,网盘",
-    "version": "0.1.0",
-    "icon": "icons/autofollow115.png",
-    "author": "Herun",
-    "level": 1,
+    "version": "0.2.0",
     "history": {
+      "v0.2.0": "集成 RSSHub 榜单（自建RSSHub可配置），发现源=豆瓣m站+RSSHub；去重优化",
+      "v0.1.1": "搜索源退避重试、去重与每次扫描限一条推送",
       "v0.1.0": "初版：配置/订阅/定时扫描/推送链路（热门/搜索源占位）"
     }
   }
