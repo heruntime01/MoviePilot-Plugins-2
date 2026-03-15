@@ -14,7 +14,7 @@ from .providers.nullbr import NullBRProvider
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.2.2"
+    plugin_version = "0.2.3"
     plugin_author = "Herun"
     plugin_order = 20
     plugin_icon = "https://movie-pilot.org/favicon.ico"
@@ -31,7 +31,6 @@ class AutoFollow115(_PluginBase):
         self._enabled = bool(self._conf.get("enabled", True))
         proxy = self._conf.get('http_proxy')
         provs = [PanSouProvider(proxy=proxy), AiPanProvider(proxy=proxy)]
-        # NullBR optional
         if bool(self._conf.get('enable_nullbr')):
             base = (self._conf.get('nullbr_base') or '').strip()
             provs.append(NullBRProvider(base=base, proxy=proxy))
@@ -124,10 +123,15 @@ class AutoFollow115(_PluginBase):
         tv_list: List[Dict] = []
         movie_list: List[Dict] = []
         try:
-            tv_list.extend(douban_hot('tv', 0, 20))
-            movie_list.extend(douban_hot('movie', 0, 20))
-        except Exception:
-            pass
+            tv = douban_hot('tv', 0, 20) or []
+            mv = douban_hot('movie', 0, 20) or []
+            tv_list.extend(tv)
+            movie_list.extend(mv)
+            if hasattr(self, 'info'):
+                self.info(f"douban hot tv={len(tv)} movie={len(mv)}")
+        except Exception as e:
+            if hasattr(self, 'info'):
+                self.info(f"douban hot error: {e}")
         if bool(self._conf.get('enable_rsshub', True)):
             base = (self._conf.get('rsshub_base') or '').strip() or 'https://rss.hrtime.asia:4000'
             proxy = self._conf.get('http_proxy')
@@ -136,15 +140,25 @@ class AutoFollow115(_PluginBase):
             movie_paths = _split_lines(self._conf.get('rsshub_movie_paths') or '')
             tv_paths = _split_lines(self._conf.get('rsshub_tv_paths') or '')
             try:
-                movie_list.extend(fetch_rsshub(base, movie_paths, proxy=proxy))
-            except Exception:
-                pass
+                m2 = fetch_rsshub(base, movie_paths, proxy=proxy)
+                movie_list.extend(m2)
+                if hasattr(self, 'info'):
+                    self.info(f"rsshub movie items={len(m2)}")
+            except Exception as e:
+                if hasattr(self, 'info'):
+                    self.info(f"rsshub movie error: {e}")
             try:
-                tv_list.extend(fetch_rsshub(base, tv_paths, proxy=proxy))
-            except Exception:
-                pass
+                t2 = fetch_rsshub(base, tv_paths, proxy=proxy)
+                tv_list.extend(t2)
+                if hasattr(self, 'info'):
+                    self.info(f"rsshub tv items={len(t2)}")
+            except Exception as e:
+                if hasattr(self, 'info'):
+                    self.info(f"rsshub tv error: {e}")
         self._discover_cache['tv'] = self._merge_discover(tv_list)
         self._discover_cache['movie'] = self._merge_discover(movie_list)
+        if hasattr(self, 'info'):
+            self.info(f"discover cached tv={len(self._discover_cache['tv'])} movie={len(self._discover_cache['movie'])}")
 
     def _push_115(self, title: str, url: str):
         text = f"{title}\n{url}"
@@ -163,7 +177,9 @@ class AutoFollow115(_PluginBase):
             for p in self._providers:
                 try:
                     rs = p.search(q, sub.get('type') or 'tv', sub.get('year'))
-                except Exception:
+                except Exception as e:
+                    if hasattr(self, 'info'):
+                        self.info(f"provider {getattr(p,'name','?')} error: {e}")
                     rs = []
                 for r in rs:
                     r['score'] = r.get('score',0) + score_title(r.get('title') or q)
