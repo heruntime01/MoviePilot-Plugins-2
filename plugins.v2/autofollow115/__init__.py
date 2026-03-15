@@ -35,7 +35,7 @@ DEFAULT_RSSHUB_TV_PATHS = """
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
     plugin_desc = "订阅豆瓣热门 + RSSHub 榜单，聚合网盘搜索源，命中后推送 115 链接到对话框自动转存"
-    plugin_version = "0.3.9"
+    plugin_version = "0.4.0"
     plugin_config_prefix = 'autofollow115_'
     plugin_author = "Herun"
     author_url = 'https://github.com/heruntime01'
