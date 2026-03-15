@@ -1,12 +1,13 @@
+
 from typing import Any, Dict, List, Optional, Tuple
 from apscheduler.triggers.cron import CronTrigger
 from app.plugins import _PluginBase
 from app.schemas import NotificationType
 
-class _DummyProvider:
-    name = "dummy"
-    def search(self, **kwargs):
-        return []
+from .douban import hot as douban_hot
+from .matching import score as score_title, good_enough
+from .providers.pansou import PanSouProvider
+from .providers.aipan import AiPanProvider
 
 class AutoFollow115(_PluginBase):
     plugin_name = "115 自动追剧"
@@ -26,7 +27,8 @@ class AutoFollow115(_PluginBase):
     def init_plugin(self, config: dict = None):
         self._conf = config or {}
         self._enabled = bool(self._conf.get("enabled", True))
-        self._providers = [_DummyProvider()]
+        proxy = self._conf.get('http_proxy')
+        self._providers = [PanSouProvider(proxy=proxy), AiPanProvider(proxy=proxy)]
 
     def get_state(self) -> bool:
         return self._enabled
@@ -55,12 +57,14 @@ class AutoFollow115(_PluginBase):
             {"type": "switch", "key": "prefer_pack", "props": {"label": "优先整季/全集包"}},
             {"type": "chips", "key": "quality_prefs", "props": {"label": "质量偏好", "multiple": True},
              "items": [{"text":"2160p"},{"text":"1080p"},{"text":"HEVC"},{"text":"HDR"},{"text":"WEB-DL"}]},
+            {"type": "text", "key": "http_proxy", "props": {"label": "HTTP 代理(可选)", "placeholder": "http://host:port"}},
         ]
         defaults = {
             "enabled": True,
             "cron_scan": "*/30 * * * *",
             "prefer_pack": True,
-            "quality_prefs": ["2160p", "HEVC", "HDR"]
+            "quality_prefs": ["2160p", "HEVC", "HDR"],
+            "http_proxy": None
         }
         return form, defaults
 
@@ -75,24 +79,46 @@ class AutoFollow115(_PluginBase):
         ]
 
     def job_discover(self, **kwargs):
-        self._discover_cache["tv"] = [
-            {"title": "示例剧集 A", "year": 2024, "douban_id": "tv001"},
-            {"title": "示例剧集 B", "year": 2023, "douban_id": "tv002"},
-        ]
-        self._discover_cache["movie"] = [
-            {"title": "示例电影 X", "year": 2024, "douban_id": "m001"},
-            {"title": "示例电影 Y", "year": 2022, "douban_id": "m002"},
-        ]
-
-    def job_scan(self, **kwargs):
-        subs = self.get_data("subs") or []
-        for _s in subs:
+        try:
+            self._discover_cache["tv"] = douban_hot('tv', 0, 20)
+            self._discover_cache["movie"] = douban_hot('movie', 0, 20)
+        except Exception:
             pass
 
     def _push_115(self, title: str, url: str):
         text = f"{title}
 {url}"
         self.post_message(mtype=NotificationType.Text, title="[115自动追剧] 命中", text=text)
+
+    def job_scan(self, **kwargs):
+        subs = self.get_data("subs") or []
+        prefer_pack = bool(self._conf.get('prefer_pack', True))
+        if not subs:
+            return
+        for sub in subs:
+            q = sub.get('title')
+            if not q:
+                continue
+            results: List[Dict] = []
+            for p in self._providers:
+                try:
+                    rs = p.search(q, sub.get('type') or 'tv', sub.get('year'))
+                except Exception:
+                    rs = []
+                for r in rs:
+                    r['score'] = r.get('score',0) + score_title(r.get('title') or q)
+                results.extend(rs)
+            # unique by url
+            seen = set(); uniq=[]
+            for r in sorted(results, key=lambda x: x.get('score',0), reverse=True):
+                u = r.get('url');
+                if not u or u in seen:
+                    continue
+                seen.add(u); uniq.append(r)
+            # pick top few
+            for r in uniq[:3]:
+                if good_enough(r.get('title') or q, sub.get('year'), prefer_pack=prefer_pack):
+                    self._push_115(q, r['url'])
 
     def api_discover(self, request=None):
         t = (request.query_params.get("type") if request else None) or "tv"
