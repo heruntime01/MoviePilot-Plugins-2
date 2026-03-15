@@ -1,18 +1,14 @@
 
-import re
-from typing import List, Dict
+from typing import List, Dict, Optional
 from .base import SearchProvider
+from urllib.parse import quote
 
 class PanSouProvider(SearchProvider):
     name = 'pansou'
-    def search(self, query: str, media_type: str, year: int|None=None) -> List[Dict]:
-        # pansou: simple GET
-        opener = self._build_opener()
-        url = f'https://www.pansou.com/?q={__import__("urllib.parse").parse.quote(query)}'
+    def search(self, query: str, media_type: str, year: Optional[int]=None) -> List[Dict]:
+        url = f'https://www.pansou.com/?q={quote(query)}'
         try:
-            req = __import__('urllib.request').request.Request(url, headers={'User-Agent':'Mozilla/5.0'})
-            with opener.open(req, timeout=self.timeout) as resp:
-                html = resp.read().decode('utf-8','ignore')
+            html = self._get_html(url)
         except Exception:
             return []
         links = self.extract_115(html)
