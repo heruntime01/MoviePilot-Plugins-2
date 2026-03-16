@@ -257,9 +257,10 @@
       "v0.6.2": "新增：设置页加入“手动订阅”区域（标题/类型/年份）；保存设置即添加订阅并清空标题/年份；其余保持不变",
       "v0.6.3": "增强日志（分阶段+上下文）；详情页新增“今日候选”海报卡片（来自 RSSHub 热榜/周榜），支持一键订阅；新增筛选项（地区/类型/关键词）；新增 discover 定时任务；与系统订阅保持隔离",
       "v0.6.4": "修复：_first_img 正则在单引号原始串中包含单引号导致 SyntaxError；改用双引号原始串 r\"<img[^>]+src=[\"']([^\"']+)[\"']\"。并将 115 链接正则改为原始串。",
-      "v0.6.5": "增强：豆瓣ID解析兼容 doubanapp/dispatch/.../数字；允许 link 为空；TV 默认路径改为 /douban/movie/weekly/tv_hot；discover 增加每路径统计日志。"
+      "v0.6.5": "增强：豆瓣ID解析兼容 doubanapp/dispatch/.../数字；允许 link 为空；TV 默认路径改为 /douban/movie/weekly/tv_hot；discover 增加每路径统计日志。",
+      "v0.6.6": "修复：_first_img 正则改为三引号原始串 r\"\"\"<img[^>]+src=([\"'])([^\"']+)\\1\"\"\"，彻底规避引号冲突导致的 SyntaxError；保留 0.6.5 所有兼容改动。"
     },
-    "version": "0.6.5",
+    "version": "0.6.6",
     "id": "autofollow115",
     "name": "115 自动追剧",
     "author": "Herun",
