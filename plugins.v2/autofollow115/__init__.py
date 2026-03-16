@@ -20,7 +20,7 @@ class AutoFollow115(_PluginBase):
     plugin_desc = '自动追剧/电影到 115：发现→筛选→订阅→搜索→推送→进度（独立于系统订阅）'
     plugin_icon = 'autofollow115.png'
     plugin_color = '#5E81AC'
-    plugin_version = '0.6.5'
+    plugin_version = '0.6.6'
     plugin_author = 'heruntime01'
     author_url = 'https://github.com/heruntime01'
     plugin_config_prefix = 'autofollow115_'
@@ -398,8 +398,8 @@ class AutoFollow115(_PluginBase):
     def _first_img(self, html: str) -> str:
         if not html:
             return ''
-        m = re.search(r"<img[^>]+src=["']([^"']+)["']", html, re.I)
-        return (m.group(1).strip() if m else '')
+        m = re.search(r"""<img[^>]+src=(["'])([^"']+)""", html, re.I)
+        return (m.group(2).strip() if m else '')
 
     def _first_douban_id(self, link: str) -> str:
         if not link:
